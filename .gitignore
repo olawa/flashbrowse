@@ -1,0 +1,9 @@
+.DS_Store
+*.app
+cache/
+Flashbrowse
+FlashbrowseTests
+.build/
+.swiftpm/
+xcuserdata/
+DerivedData/
