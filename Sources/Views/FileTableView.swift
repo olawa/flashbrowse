@@ -525,6 +525,23 @@ public struct FileTableView: View {
             Label("Reveal in Finder", systemImage: "macwindow")
         }
         
+        let toolsService = ExternalToolsService.shared
+        if toolsService.hasRsnap && ExternalToolsService.isGenomicsFile(url: item.url) {
+            Button(action: {
+                toolsService.openInRsnap(urls: targets)
+            }) {
+                Label(targets.count > 1 ? "Open \(targets.count) Files in rsnap" : "Open in rsnap", systemImage: "waveform.path.ecg")
+            }
+        }
+        
+        if toolsService.hasIGV && ExternalToolsService.isGenomicsFile(url: item.url) {
+            Button(action: {
+                toolsService.openInIGV(urls: targets)
+            }) {
+                Label(targets.count > 1 ? "Load \(targets.count) Files into IGV" : "Load into IGV", systemImage: "dna")
+            }
+        }
+        
         Divider()
         
         Button(action: {

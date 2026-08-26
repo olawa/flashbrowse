@@ -30,10 +30,54 @@ public class IndexService: ObservableObject {
     
     @Published public var activeIndex: FileTypeIndex?
     @Published public var indexedGroups: [DirectoryIndexGroup] = []
-    @Published public var selectedDirectory: URL?
+    @Published public var selectedDirectories: Set<URL> = []
     @Published public var isScanning: Bool = false
     @Published public var totalFilesFound: Int = 0
     @Published public var searchQuery: String = ""
+    
+    public var isAllSelected: Bool {
+        !indexedGroups.isEmpty && selectedDirectories.count == indexedGroups.count
+    }
+    
+    public var selectedDirectory: URL? {
+        get { selectedDirectories.first }
+        set {
+            if let val = newValue {
+                selectedDirectories = [val]
+            } else {
+                selectedDirectories = []
+            }
+        }
+    }
+    
+    public func selectAllDirectories() {
+        selectedDirectories = Set(indexedGroups.map { $0.directoryURL })
+    }
+    
+    public func deselectAllDirectories() {
+        selectedDirectories = []
+    }
+    
+    public func toggleDirectorySelection(url: URL, isShiftPressed: Bool = false, isCommandPressed: Bool = false) {
+        if isShiftPressed, let lastSelected = selectedDirectories.first, let lastIdx = indexedGroups.firstIndex(where: { $0.directoryURL == lastSelected }), let targetIdx = indexedGroups.firstIndex(where: { $0.directoryURL == url }) {
+            let start = min(lastIdx, targetIdx)
+            let end = max(lastIdx, targetIdx)
+            let rangeGroups = indexedGroups[start...end]
+            for g in rangeGroups {
+                selectedDirectories.insert(g.directoryURL)
+            }
+        } else if isCommandPressed {
+            if selectedDirectories.contains(url) {
+                if selectedDirectories.count > 1 {
+                    selectedDirectories.remove(url)
+                }
+            } else {
+                selectedDirectories.insert(url)
+            }
+        } else {
+            selectedDirectories = [url]
+        }
+    }
     
     private var scanTask: Task<Void, Never>?
     
@@ -118,7 +162,7 @@ public class IndexService: ObservableObject {
         scanTask?.cancel()
         self.activeIndex = nil
         self.indexedGroups = []
-        self.selectedDirectory = nil
+        self.selectedDirectories = []
         self.isScanning = false
     }
 }
