@@ -686,6 +686,14 @@ public struct InteractivePhotoView: View {
     @State private var isHoveringLeftChevron: Bool = false
     @State private var isHoveringRightChevron: Bool = false
     
+    // Computed active swipe offset (combining click-drag and trackpad horizontal scrolling)
+    private var activeSwipe: CGFloat {
+        if isDragging {
+            return swipeTranslation
+        }
+        return state.cumulativeSwipeOffset
+    }
+    
     public init(img: NSImage, meta: ExtendedFileMetadata, isDarkTheme: Bool) {
         self.img = img
         self.meta = meta
@@ -705,13 +713,12 @@ public struct InteractivePhotoView: View {
                     .aspectRatio(contentMode: .fit)
                     .scaleEffect(scale)
                     .offset(
-                        x: scale > 1.05 ? offset.width : swipeTranslation,
+                        x: scale > 1.05 ? offset.width : activeSwipe,
                         y: scale > 1.05 ? offset.height : 0
                     )
-                    .rotationEffect(.degrees(scale <= 1.05 ? Double(swipeTranslation / 24.0) : 0))
+                    .rotationEffect(.degrees(scale <= 1.05 ? Double(activeSwipe / 24.0) : 0))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(scale <= 1.05 ? 16 : 0)
-                    .contentShape(Rectangle())
                     // Double Tap Gesture to Toggle Fit vs 2.5x Zoom
                     .onTapGesture(count: 2) {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
@@ -743,71 +750,6 @@ public struct InteractivePhotoView: View {
                                     }
                                 } else {
                                     lastScale = scale
-                                }
-                            }
-                    )
-                    // Drag to Pan (when zoomed) or Swipe / Cull (when at 1.0x)
-                    .simultaneousGesture(
-                        DragGesture()
-                            .onChanged { val in
-                                if scale > 1.05 {
-                                    offset = CGSize(
-                                        width: lastOffset.width + val.translation.width,
-                                        height: lastOffset.height + val.translation.height
-                                    )
-                                } else {
-                                    swipeTranslation = val.translation.width
-                                    isDragging = true
-                                }
-                            }
-                            .onEnded { val in
-                                if scale > 1.05 {
-                                    lastOffset = offset
-                                } else {
-                                    isDragging = false
-                                    let threshold: CGFloat = 85
-                                    if state.isPhotoOrganizerActive {
-                                        if val.translation.width > threshold {
-                                            // Swipe Right -> KEEP / PICK
-                                            withAnimation(.easeOut(duration: 0.18)) {
-                                                swipeTranslation = 600
-                                            }
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                                state.pickCurrentImage()
-                                                swipeTranslation = 0
-                                            }
-                                        } else if val.translation.width < -threshold {
-                                            // Swipe Left -> DISCARD / TRASH
-                                            withAnimation(.easeOut(duration: 0.18)) {
-                                                swipeTranslation = -600
-                                            }
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                                state.trashCurrentImage()
-                                                swipeTranslation = 0
-                                            }
-                                        } else {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                swipeTranslation = 0
-                                            }
-                                        }
-                                    } else {
-                                        // Normal browsing mode: Swipe Left = Next, Swipe Right = Prev
-                                        if val.translation.width > threshold {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                                state.previousImage()
-                                                swipeTranslation = 0
-                                            }
-                                        } else if val.translation.width < -threshold {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                                state.nextImage()
-                                                swipeTranslation = 0
-                                            }
-                                        } else {
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                swipeTranslation = 0
-                                            }
-                                        }
-                                    }
                                 }
                             }
                     )
@@ -856,8 +798,8 @@ public struct InteractivePhotoView: View {
                 }
                 
                 // Dynamic Swipe Badges (KEEP / DISCARD in Organizer Mode)
-                if state.isPhotoOrganizerActive && scale <= 1.05 && swipeTranslation != 0 {
-                    if swipeTranslation > 25 {
+                if state.isPhotoOrganizerActive && scale <= 1.05 && activeSwipe != 0 {
+                    if activeSwipe > 20 {
                         VStack {
                             HStack {
                                 Text("⭐ KEEP")
@@ -872,13 +814,13 @@ public struct InteractivePhotoView: View {
                                     )
                                     .cornerRadius(10)
                                     .rotationEffect(.degrees(-15))
-                                    .opacity(min(1.0, Double(swipeTranslation) / 80.0))
+                                    .opacity(min(1.0, Double(activeSwipe) / 75.0))
                                     .padding(32)
                                 Spacer()
                             }
                             Spacer()
                         }
-                    } else if swipeTranslation < -25 {
+                    } else if activeSwipe < -20 {
                         VStack {
                             HStack {
                                 Spacer()
@@ -894,7 +836,7 @@ public struct InteractivePhotoView: View {
                                     )
                                     .cornerRadius(10)
                                     .rotationEffect(.degrees(15))
-                                    .opacity(min(1.0, Double(-swipeTranslation) / 80.0))
+                                    .opacity(min(1.0, Double(-activeSwipe) / 75.0))
                                     .padding(32)
                             }
                             Spacer()
@@ -927,6 +869,73 @@ public struct InteractivePhotoView: View {
                         .padding(.bottom, 16)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            // Drag to Pan (when zoomed) or Swipe / Cull (when at 1.0x)
+            .gesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { val in
+                        if scale > 1.05 {
+                            offset = CGSize(
+                                width: lastOffset.width + val.translation.width,
+                                height: lastOffset.height + val.translation.height
+                            )
+                        } else {
+                            swipeTranslation = val.translation.width
+                            isDragging = true
+                        }
+                    }
+                    .onEnded { val in
+                        if scale > 1.05 {
+                            lastOffset = offset
+                        } else {
+                            isDragging = false
+                            let threshold: CGFloat = 80
+                            if state.isPhotoOrganizerActive {
+                                if val.translation.width > threshold {
+                                    // Swipe Right -> KEEP / PICK
+                                    withAnimation(.easeOut(duration: 0.18)) {
+                                        swipeTranslation = 600
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                        state.pickCurrentImage()
+                                        swipeTranslation = 0
+                                    }
+                                } else if val.translation.width < -threshold {
+                                    // Swipe Left -> DISCARD / TRASH
+                                    withAnimation(.easeOut(duration: 0.18)) {
+                                        swipeTranslation = -600
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                        state.trashCurrentImage()
+                                        swipeTranslation = 0
+                                    }
+                                } else {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        swipeTranslation = 0
+                                    }
+                                }
+                            } else {
+                                // Normal browsing mode: Swipe Left = Next, Swipe Right = Prev
+                                if val.translation.width > threshold {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                        state.previousImage()
+                                        swipeTranslation = 0
+                                    }
+                                } else if val.translation.width < -threshold {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                        state.nextImage()
+                                        swipeTranslation = 0
+                                    }
+                                } else {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        swipeTranslation = 0
+                                    }
+                                }
+                            }
+                        }
+                    }
+            )
         }
         .focusable()
         // Keyboard Shortcuts for Rapid Culling & Navigation
@@ -1147,6 +1156,22 @@ public struct InteractivePhotoView: View {
 
 // MARK: - Multi-Monitor Window Controller
 @MainActor
+// Custom HostingView to allow instant touch / first-click response and auto window focus on touch
+public class InspectorHostingView<Content: View>: NSHostingView<Content> {
+    public override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        return true
+    }
+    
+    public override func mouseDown(with event: NSEvent) {
+        if let win = self.window, !win.isKeyWindow {
+            win.makeKeyAndOrderFront(nil)
+        }
+        super.mouseDown(with: event)
+    }
+}
+
+// MARK: - Multi-Monitor Window Controller
+@MainActor
 public class InspectorWindowController: NSObject {
     public static let shared = InspectorWindowController()
     public var window: NSWindow?
@@ -1170,7 +1195,8 @@ public class InspectorWindowController: NSObject {
             )
             win.title = "Flashbrowse Inspector (Multi-Monitor)"
             win.isReleasedWhenClosed = false
-            win.contentView = NSHostingView(rootView: InspectorView())
+            win.acceptsMouseMovedEvents = true
+            win.contentView = InspectorHostingView(rootView: InspectorView())
             self.window = win
         }
         

@@ -118,9 +118,46 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         
-        // Remote Scroll Monitor: Hold Command and scroll trackpad to scroll external screen!
-        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-            if event.modifierFlags.contains(.command) && SharedInspectorState.shared.isInspectorWindowOpen {
+        // Touch / Trackpad & Remote Scroll Monitor
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .swipe, .leftMouseDown, .magnify]) { event in
+            // Check if interaction is targeted at Inspector Window
+            if let inspWin = InspectorWindowController.shared.window, inspWin.isVisible {
+                let mouseLoc = NSEvent.mouseLocation
+                let isOverInspector = inspWin.frame.contains(mouseLoc) || event.window == inspWin
+                
+                if isOverInspector {
+                    // Auto-activate inspector window so touch / gestures work without prior click
+                    if NSApp.keyWindow != inspWin && (event.type == .leftMouseDown || event.type == .magnify || event.type == .scrollWheel) {
+                        inspWin.makeKey()
+                    }
+                    
+                    // Trackpad / iPad swipe when inspecting images
+                    if SharedInspectorState.shared.contentType == .image {
+                        if event.type == .swipe {
+                            let dx = event.deltaX
+                            if dx != 0 {
+                                Task { @MainActor in
+                                    SharedInspectorState.shared.handleHorizontalScroll(deltaX: dx * 50)
+                                }
+                                return nil
+                            }
+                        } else if event.type == .scrollWheel && !event.modifierFlags.contains(.command) {
+                            let dx = event.scrollingDeltaX
+                            let dy = event.scrollingDeltaY
+                            // Prioritize horizontal swipe over slight vertical movement
+                            if abs(dx) > 8 && abs(dx) > abs(dy) * 1.2 {
+                                Task { @MainActor in
+                                    SharedInspectorState.shared.handleHorizontalScroll(deltaX: dx)
+                                }
+                                return nil
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Remote Scroll Monitor: Hold Command and scroll trackpad to scroll inspector vertically
+            if event.type == .scrollWheel && event.modifierFlags.contains(.command) && SharedInspectorState.shared.isInspectorWindowOpen {
                 let dy = event.scrollingDeltaY
                 if dy != 0 {
                     Task { @MainActor in

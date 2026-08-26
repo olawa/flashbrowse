@@ -112,6 +112,11 @@ public class SharedInspectorState: ObservableObject {
     @Published public var scrollDeltaY: CGFloat = 0
     @Published public var scrollPulse: Int = 0
     
+    // Live Trackpad / Touch Horizontal Swipe
+    @Published public var cumulativeSwipeOffset: CGFloat = 0
+    private var lastSwipeActionTime: Date = Date.distantPast
+    private var resetSwipeTask: Task<Void, Never>?
+    
     public var currentImageIndex: Int {
         guard let cur = currentURL, let idx = siblingImageURLs.firstIndex(of: cur) else { return 0 }
         return idx
@@ -135,6 +140,55 @@ public class SharedInspectorState: ObservableObject {
     public func scrollInspector(by delta: CGFloat) {
         self.scrollDeltaY = delta
         self.scrollPulse &+= 1
+    }
+    
+    public func handleHorizontalScroll(deltaX: CGFloat) {
+        guard contentType == .image else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastSwipeActionTime) > 0.35 else { return }
+        
+        cumulativeSwipeOffset += deltaX
+        
+        resetSwipeTask?.cancel()
+        resetSwipeTask = Task {
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            if !Task.isCancelled {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    self.cumulativeSwipeOffset = 0
+                }
+            }
+        }
+        
+        let threshold: CGFloat = 35.0
+        if cumulativeSwipeOffset > threshold {
+            lastSwipeActionTime = now
+            resetSwipeTask?.cancel()
+            withAnimation(.easeOut(duration: 0.15)) {
+                self.cumulativeSwipeOffset = 180
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                if self.isPhotoOrganizerActive {
+                    self.pickCurrentImage()
+                } else {
+                    self.previousImage()
+                }
+                self.cumulativeSwipeOffset = 0
+            }
+        } else if cumulativeSwipeOffset < -threshold {
+            lastSwipeActionTime = now
+            resetSwipeTask?.cancel()
+            withAnimation(.easeOut(duration: 0.15)) {
+                self.cumulativeSwipeOffset = -180
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                if self.isPhotoOrganizerActive {
+                    self.trashCurrentImage()
+                } else {
+                    self.nextImage()
+                }
+                self.cumulativeSwipeOffset = 0
+            }
+        }
     }
     
     public func showBanner(_ message: String) {
