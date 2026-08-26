@@ -102,6 +102,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         
+        // Terminate app & close inspector when the main browser window closes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: nil
+        )
+        
         // Remote Scroll Monitor: Hold Command and scroll trackpad to scroll external screen!
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
             if event.modifierFlags.contains(.command) && SharedInspectorState.shared.isInspectorWindowOpen {
@@ -125,6 +133,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return nil
             }
             return event
+        }
+    }
+    
+    @objc private func windowWillClose(_ notification: Notification) {
+        guard let closedWindow = notification.object as? NSWindow else { return }
+        
+        // If the main browser window was closed, close the inspector and quit Flashbrowse
+        Task { @MainActor in
+            let inspectorWin = InspectorWindowController.shared.window
+            if closedWindow != inspectorWin {
+                inspectorWin?.close()
+                InspectorWindowController.shared.window = nil
+                SharedInspectorState.shared.isInspectorWindowOpen = false
+                NSApp.terminate(nil)
+            }
         }
     }
     
