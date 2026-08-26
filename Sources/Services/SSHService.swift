@@ -12,6 +12,7 @@ public class SSHService: ObservableObject {
     @Published public var isLoading: Bool = false
     @Published public var errorMessage: String?
     @Published public var isRemoteBrowserOpen: Bool = false
+    @Published public var isDualSplitWithLocal: Bool = true
     
     private var pathHistory: [String] = []
     private var forwardPathHistory: [String] = []
@@ -199,7 +200,6 @@ public class SSHService: ObservableObject {
         let lines = output.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard lines.count >= 1 else { return }
         
-        // First line contains resolved absolute path if pwd succeeded
         var resolvedPath = basePath
         var itemLines = lines
         if let first = lines.first, first.hasPrefix("/") {
@@ -214,18 +214,13 @@ public class SSHService: ObservableObject {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("total ") || trimmed.isEmpty { continue }
             
-            // Typical ls -la output format: drwxr-xr-x 5 user group 4096 Aug 25 14:02 folderName
             let cols = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
             guard cols.count >= 8 else { continue }
             
             let permissions = cols[0]
             let isDir = permissions.hasPrefix("d")
             let size = Int64(cols[4]) ?? 0
-            
-            // Date is usually cols 5, 6, 7 (e.g. Aug 25 14:02 or 2026-08-25 14:02)
             let dateStr = "\(cols[5]) \(cols[6]) \(cols[7])"
-            
-            // Name is remaining columns joined by space
             let name = cols.dropFirst(8).joined(separator: " ")
             if name == "." || name == ".." { continue }
             
@@ -242,7 +237,6 @@ public class SSHService: ObservableObject {
             parsedItems.append(item)
         }
         
-        // Sort: folders first, then natural compare
         self.remoteItems = parsedItems.sorted { a, b in
             if a.isDirectory != b.isDirectory {
                 return a.isDirectory && !b.isDirectory
@@ -251,7 +245,7 @@ public class SSHService: ObservableObject {
         }
     }
     
-    // MARK: - SSH Execution & File Transfer
+    // MARK: - SSH Command Execution
     public func runSSHCommand(host: SSHHost, command: String) async throws -> String {
         return try await withCheckedThrowingContinuation { continuation in
             let process = Process()
@@ -355,5 +349,39 @@ public class SSHService: ObservableObject {
         process.arguments = args
         try process.run()
         process.waitUntilExit()
+        
+        if process.terminationStatus != 0 {
+            throw NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Download failed"])
+        }
+    }
+    
+    // MARK: - Upload Local File to Remote Directory
+    public func uploadFile(localURL: URL, to remoteDirectory: String) async throws {
+        guard let host = activeHost else { return }
+        
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/scp")
+        
+        var args = ["-r", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+        if host.port != 22 {
+            args.append(contentsOf: ["-P", "\(host.port)"])
+        }
+        if let key = host.identityFile, !key.isEmpty {
+            args.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath])
+        }
+        
+        args.append(localURL.path)
+        let remoteDest = host.user.isEmpty ? "\(host.hostName):\(remoteDirectory)/" : "\(host.user)@\(host.hostName):\(remoteDirectory)/"
+        args.append(remoteDest)
+        
+        process.arguments = args
+        try process.run()
+        process.waitUntilExit()
+        
+        if process.terminationStatus == 0 {
+            await listRemoteDirectory(path: remoteDirectory)
+        } else {
+            throw NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Upload failed"])
+        }
     }
 }

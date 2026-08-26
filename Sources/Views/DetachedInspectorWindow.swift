@@ -48,11 +48,18 @@ public struct WebViewRenderer: NSViewRepresentable {
 }
 
 public struct MarkdownRenderer {
-    public static func wrapInGitHubStyleHTML(markdown: String) -> String {
+    public static func wrapInGitHubStyleHTML(markdown: String, isDark: Bool = true) -> String {
         let escaped = markdown
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "`", with: "\\`")
             .replacingOccurrences(of: "</script>", with: "<\\/script>")
+        
+        let bgColor = isDark ? "#0d1117" : "#ffffff"
+        let textColor = isDark ? "#e6edf3" : "#24292f"
+        let borderColor = isDark ? "#30363d" : "#d0d7de"
+        let codeBg = isDark ? "#161b22" : "#f6f8fa"
+        let accentColor = "#e95420"
+        let quoteColor = isDark ? "#8b949e" : "#57606a"
         
         return """
         <!DOCTYPE html>
@@ -63,23 +70,13 @@ public struct MarkdownRenderer {
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
         <style>
             :root {
-                color-scheme: light dark;
-                --bg: #ffffff;
-                --text: #24292f;
-                --border: #d0d7de;
-                --code-bg: #f6f8fa;
-                --accent: #e95420;
-                --quote: #57606a;
-            }
-            @media (prefers-color-scheme: dark) {
-                :root {
-                    --bg: #1e1e1e;
-                    --text: #e6edf3;
-                    --border: #30363d;
-                    --code-bg: #161b22;
-                    --accent: #f07144;
-                    --quote: #8b949e;
-                }
+                color-scheme: \(isDark ? "dark" : "light");
+                --bg: \(bgColor);
+                --text: \(textColor);
+                --border: \(borderColor);
+                --code-bg: \(codeBg);
+                --accent: \(accentColor);
+                --quote: \(quoteColor);
             }
             body {
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
@@ -96,6 +93,7 @@ public struct MarkdownRenderer {
                 margin-bottom: 16px;
                 font-weight: 600;
                 line-height: 1.25;
+                color: var(--text);
             }
             h1 { font-size: 2em; border-bottom: 1px solid var(--border); padding-bottom: .3em; }
             h2 { font-size: 1.5em; border-bottom: 1px solid var(--border); padding-bottom: .3em; }
@@ -109,6 +107,7 @@ public struct MarkdownRenderer {
                 overflow: auto;
                 font-size: 12px;
                 font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+                border: 1px solid var(--border);
             }
             code {
                 font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -117,7 +116,7 @@ public struct MarkdownRenderer {
                 padding: .2em .4em;
                 border-radius: 4px;
             }
-            pre code { background-color: transparent; padding: 0; }
+            pre code { background-color: transparent; padding: 0; border: 0; }
             blockquote {
                 padding: 0 1em;
                 color: var(--quote);
@@ -135,7 +134,7 @@ public struct MarkdownRenderer {
                 border: 1px solid var(--border);
             }
             table tr:nth-child(2n) { background-color: var(--code-bg); }
-            img { max-width: 100%; box-sizing: content-box; }
+            img { max-width: 100%; box-sizing: content-box; border-radius: 6px; }
             hr { height: .25em; padding: 0; margin: 24px 0; background-color: var(--border); border: 0; }
         </style>
         </head>
@@ -155,26 +154,29 @@ public struct MarkdownRenderer {
     }
 }
 
-public struct RemoteScrollView<Content: View>: View {
-    @ObservedObject var state = SharedInspectorState.shared
-    let content: Content
-    
-    public init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-    
-    public var body: some View {
-        ScrollView {
-            content
-        }
-    }
-}
-
 public struct InspectorView: View {
     @ObservedObject var state = SharedInspectorState.shared
     @State private var renderMode: Int = 0 // 0 = Rendered, 1 = Raw Source
+    @AppStorage("flashbrowse_inspector_dark_theme") private var isDarkTheme: Bool = true
     
     public init() {}
+    
+    // Theme Palette Colors
+    private var bgColor: Color {
+        isDarkTheme ? Color(red: 0.08, green: 0.08, blue: 0.09) : Color(nsColor: .windowBackgroundColor)
+    }
+    
+    private var contentBgColor: Color {
+        isDarkTheme ? Color(red: 0.05, green: 0.05, blue: 0.06) : Color(nsColor: .textBackgroundColor)
+    }
+    
+    private var cardBgColor: Color {
+        isDarkTheme ? Color(red: 0.12, green: 0.12, blue: 0.14) : Color(nsColor: .controlBackgroundColor).opacity(0.6)
+    }
+    
+    private var borderColor: Color {
+        isDarkTheme ? Color.white.opacity(0.1) : Color(nsColor: .separatorColor)
+    }
     
     public var body: some View {
         VStack(spacing: 0) {
@@ -186,6 +188,7 @@ public struct InspectorView: View {
                 
                 Text(state.metadata?.name ?? "No Selection")
                     .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(isDarkTheme ? .white : .primary)
                     .lineLimit(1)
                 
                 // Toggle between Rendered & Raw Source for Markdown / HTML
@@ -201,22 +204,40 @@ public struct InspectorView: View {
                 
                 Spacer()
                 
+                // Dark Theme Toggle
+                Button(action: {
+                    isDarkTheme.toggle()
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: isDarkTheme ? "moon.stars.fill" : "sun.max.fill")
+                            .foregroundColor(isDarkTheme ? .yellow : .orange)
+                        Text(isDarkTheme ? "Dark" : "Light")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(cardBgColor)
+                    .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+                .help("Toggle Inspector Dark/Light Theme")
+                
                 // Jump to Main Window Button
                 Button(action: {
                     InspectorWindowController.shared.warpMouseToMainWindow()
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "cursorarrow.motionlines")
-                        Text("Jump to Browser (Cmd+\\)")
+                        Text("Jump to Browser (Cmd+<)")
                             .font(.system(size: 10, weight: .medium))
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(Color(nsColor: .controlBackgroundColor))
+                    .background(cardBgColor)
                     .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
-                .help("Teleport cursor and focus back to main Flashbrowse window (Cmd+\\)")
+                .help("Teleport cursor and focus back to main Flashbrowse window (Cmd+<)")
                 
                 HStack(spacing: 4) {
                     Circle()
@@ -228,14 +249,18 @@ public struct InspectorView: View {
                 }
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(cardBgColor)
                 .cornerRadius(4)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Color(nsColor: .windowBackgroundColor))
-            
-            Divider()
+            .background(bgColor)
+            .overlay(
+                Rectangle()
+                    .frame(height: 0.5)
+                    .foregroundColor(borderColor),
+                alignment: .bottom
+            )
             
             if let meta = state.metadata {
                 HSplitView {
@@ -251,6 +276,8 @@ public struct InspectorView: View {
                 emptyState
             }
         }
+        .background(bgColor)
+        .preferredColorScheme(isDarkTheme ? .dark : .light)
     }
     
     @ViewBuilder
@@ -265,20 +292,22 @@ public struct InspectorView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(16)
                 }
-                .background(Color(nsColor: .textBackgroundColor))
+                .background(contentBgColor)
             }
             
         case .html:
             if renderMode == 0, let url = state.currentURL {
                 WebViewRenderer(url: url)
+                    .background(contentBgColor)
             } else if let text = state.textContent {
                 codeViewer(text: text)
             }
             
         case .markdown:
             if renderMode == 0, let text = state.textContent {
-                let html = MarkdownRenderer.wrapInGitHubStyleHTML(markdown: text)
+                let html = MarkdownRenderer.wrapInGitHubStyleHTML(markdown: text, isDark: isDarkTheme)
                 WebViewRenderer(htmlContent: html, baseURL: state.currentURL?.deletingLastPathComponent())
+                    .background(contentBgColor)
             } else if let text = state.textContent {
                 codeViewer(text: text)
             }
@@ -300,7 +329,7 @@ public struct InspectorView: View {
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .textBackgroundColor))
+            .background(contentBgColor)
             
         case .generic:
             VStack(spacing: 12) {
@@ -314,7 +343,7 @@ public struct InspectorView: View {
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .textBackgroundColor))
+            .background(contentBgColor)
         }
     }
     
@@ -323,11 +352,12 @@ public struct InspectorView: View {
         ScrollView {
             Text(text)
                 .font(.system(size: 12, design: .monospaced))
+                .foregroundColor(isDarkTheme ? Color(red: 0.9, green: 0.9, blue: 0.9) : .primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
                 .textSelection(.enabled)
         }
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(contentBgColor)
     }
     
     @ViewBuilder
@@ -349,7 +379,7 @@ public struct InspectorView: View {
                     metaRow(label: "Permissions", value: meta.permissions)
                 }
                 .padding(10)
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                .background(cardBgColor)
                 .cornerRadius(8)
                 
                 Text("LOCATION")
@@ -359,7 +389,7 @@ public struct InspectorView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(meta.path)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(isDarkTheme ? Color.white.opacity(0.8) : .secondary)
                         .textSelection(.enabled)
                     
                     HStack {
@@ -380,12 +410,12 @@ public struct InspectorView: View {
                     .padding(.top, 4)
                 }
                 .padding(10)
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                .background(cardBgColor)
                 .cornerRadius(8)
             }
             .padding(14)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(bgColor)
     }
     
     private var emptyState: some View {
@@ -401,7 +431,7 @@ public struct InspectorView: View {
                 .foregroundColor(.secondary.opacity(0.8))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(contentBgColor)
     }
     
     @ViewBuilder
@@ -413,7 +443,7 @@ public struct InspectorView: View {
                 .frame(width: 80, alignment: .leading)
             Text(value)
                 .font(.system(size: 11))
-                .foregroundColor(.primary)
+                .foregroundColor(isDarkTheme ? .white : .primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
