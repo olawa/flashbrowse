@@ -29,5 +29,8 @@ cp Info.plist Flashbrowse.app/Contents/
 
 chmod +x Flashbrowse.app/Contents/MacOS/Flashbrowse
 
+echo "✍️ Ad-hoc codesigning Flashbrowse.app..."
+codesign --force --deep --sign - Flashbrowse.app
+
 echo "🚀 Flashbrowse.app ready!"
 echo "   Run: open Flashbrowse.app"
