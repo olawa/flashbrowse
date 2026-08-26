@@ -20,7 +20,7 @@
 
 <br />
 
-[**📥 Download Latest Release (v0.1.0)**](https://github.com/olawa/flashbrowse/releases/latest) • [**✨ Features**](#-key-features) • [**⌨️ Keyboard Cheatsheet**](#️-keyboard-shortcuts) • [**🛠️ Build from Source**](#️-building-from-source)
+[**📥 Download Latest Release (v0.2.0)**](https://github.com/olawa/flashbrowse/releases/latest) • [**✨ Features**](#-key-features) • [**⌨️ Keyboard Cheatsheet**](#️-keyboard-shortcuts) • [**🛠️ Build from Source**](#️-building-from-source)
 
 </div>
 
@@ -49,9 +49,10 @@ macOS Finder can be frustrating: slow list sorting, lack of responsive previews,
 
 ### 🖥️ 1. Multi-Monitor Live Inspector (`Cmd + Option + I`)
 Drag the Inspector to your secondary monitor. As you hover over files on your main screen, the external display instantly renders:
-- **Rich Markdown (`.md`)**: GitHub-style typography, styled code blocks, tables, and dark mode.
-- **Interactive HTML (`.html`)**: Live WebKit layout with instant toggle between `[ 👁 Rendered | 💻 Source ]`.
-- **Media & Source Code**: High-resolution image viewer, syntax-highlighted code, and POSIX metadata.
+- **PDF Documents (`.pdf`)**: Native hardware-accelerated `PDFKit` with multi-page continuous scrolling.
+- **Excel & Spreadsheets (`.xlsx`, `.csv`, `.tsv`)**: Fast dark-themed data table grid with live row filtering and multi-tab sheet navigation.
+- **Word & Office Docs (`.docx`, `.pages`, `.pptx`, `.rtf`)**: Native QuickLook rendering with full typography and layouts.
+- **Rich Markdown (`.md`) & HTML (`.html`)**: Live WebKit layout with instant toggle between `[ 👁 Rendered | 💻 Source ]`.
 - **Frictionless Control**:
   - **`Cmd + <`**: Teleport your mouse cursor directly between screens.
   - **`Cmd + Scroll`**: Scroll the external document from your file list without moving the mouse!
@@ -64,10 +65,22 @@ Drag the Inspector to your secondary monitor. As you hover over files on your ma
 
 ---
 
-### 💻 2. Integrated Terminal Drawer (`Cmd + J`)
-- Bottom-docked interactive `zsh` terminal with real-time output and history (`Up`/`Down`).
-- **Auto-CD Synchronization**: Automatically switches the working directory to the folder you click on in Flashbrowse.
-- Run `git`, `cargo`, `swift`, `samtools`, `python`, and your favorite command-line tools without context switching.
+### 🌐 2. Native SSH & Remote Server Explorer
+- **Zero-Config Discovery**: Auto-parses your `~/.ssh/config` to discover clusters and servers instantly.
+- **Side-by-Side Local ⇄ Remote Bridge**: Left pane shows your local system; right pane shows the remote server.
+- **Drag & Drop Transfers**: Drag local files onto the remote pane to upload via `SCP`, or drag remote files onto local folders to download.
+- **Persistent Pinned Mode**: Browse local favorites and places without closing or interrupting your active SSH session.
+- **Direct Remote Path Navigation**: Click the path bar or press **`Cmd + G`** to jump anywhere on the remote server.
+
+<br />
+
+---
+
+### 💻 3. Integrated Terminal Drawer & 2-Way Sync (`Cmd + J`)
+- Bottom-docked interactive `zsh` terminal with real-time output and history.
+- **2-Way Directory Sync**: Running `cd <path>` in the terminal immediately moves both the terminal and the browser view in real-time (and vice versa).
+- **Dual-Terminal Split Mode**: Split the terminal into **Left Terminal | Right Terminal** (`[ ◫ Split Terminal ]`), allowing you to execute local commands on the left and remote SSH commands on the right simultaneously.
+- **Instant Keyboard Jump**: Press **`Cmd + J`** to focus the command line; press **`Escape`** to jump right back to file navigation.
 
 <div align="center">
   <img src="assets/terminal_preview.png" alt="Integrated Terminal Preview" width="800" />
