@@ -160,6 +160,24 @@ public class NavigationState: ObservableObject {
         reload()
         startDirectoryWatcher()
         updateGitStatus()
+        
+        NotificationCenter.default.addObserver(forName: .flashbrowseInspectorSelectedURL, object: nil, queue: .main) { [weak self] notif in
+            guard let targetURL = notif.object as? URL else { return }
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                let parent = targetURL.deletingLastPathComponent().standardized
+                if parent == self.currentDirectory.standardized {
+                    self.selectedURLs = [targetURL]
+                    self.lastSelectedURL = targetURL
+                }
+            }
+        }
+        
+        NotificationCenter.default.addObserver(forName: .flashbrowseReloadDirectory, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.reload()
+            }
+        }
     }
     
     // MARK: - Toast Message Helper

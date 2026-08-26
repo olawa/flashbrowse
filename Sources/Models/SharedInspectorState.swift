@@ -75,9 +75,16 @@ public enum InspectorContentType {
     case generic
 }
 
+public enum PhotoOrganizerAction {
+    case trashed(originalURL: URL)
+    case picked(originalURL: URL, pickedURL: URL)
+}
+
 @MainActor
 public class SharedInspectorState: ObservableObject {
     public static let shared = SharedInspectorState()
+    
+    public static let imageExtensions = ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "tiff", "heic", "ico", "psd", "dng", "cr2", "nef", "arw", "raw"]
     
     @Published public var currentURL: URL? {
         didSet {
@@ -92,9 +99,31 @@ public class SharedInspectorState: ObservableObject {
     @Published public var parsedTableRows: [[String]] = []
     @Published public var isInspectorWindowOpen: Bool = false
     
+    // Photo Organizer & Sibling Navigation
+    @Published public var siblingImageURLs: [URL] = []
+    @Published public var isPhotoOrganizerActive: Bool = false
+    @Published public var isLightboxMode: Bool = false
+    @Published public var photoActionBanner: String? = nil
+    @Published public var undoStack: [PhotoOrganizerAction] = []
+    
+    private var bannerTask: Task<Void, Never>?
+    
     // Remote Scroll Channel
     @Published public var scrollDeltaY: CGFloat = 0
     @Published public var scrollPulse: Int = 0
+    
+    public var currentImageIndex: Int {
+        guard let cur = currentURL, let idx = siblingImageURLs.firstIndex(of: cur) else { return 0 }
+        return idx
+    }
+    
+    public var totalImageCount: Int {
+        siblingImageURLs.count
+    }
+    
+    public var canUndo: Bool {
+        !undoStack.isEmpty
+    }
     
     private init() {}
     
@@ -106,6 +135,139 @@ public class SharedInspectorState: ObservableObject {
     public func scrollInspector(by delta: CGFloat) {
         self.scrollDeltaY = delta
         self.scrollPulse &+= 1
+    }
+    
+    public func showBanner(_ message: String) {
+        self.photoActionBanner = message
+        bannerTask?.cancel()
+        bannerTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            if !Task.isCancelled {
+                self.photoActionBanner = nil
+            }
+        }
+    }
+    
+    // MARK: - Sibling Image Navigation
+    public func scanSiblingImages(for url: URL) {
+        let parent = url.deletingLastPathComponent()
+        guard let contents = try? FileManager.default.contentsOfDirectory(at: parent, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else {
+            self.siblingImageURLs = [url]
+            return
+        }
+        
+        let images = contents.filter { file in
+            let ext = file.pathExtension.lowercased()
+            return Self.imageExtensions.contains(ext)
+        }.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        
+        self.siblingImageURLs = images
+    }
+    
+    public func nextImage() {
+        guard !siblingImageURLs.isEmpty else { return }
+        let idx = currentImageIndex
+        if idx + 1 < siblingImageURLs.count {
+            let nextURL = siblingImageURLs[idx + 1]
+            self.currentURL = nextURL
+            NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: nextURL)
+        } else {
+            showBanner("Reached last image")
+        }
+    }
+    
+    public func previousImage() {
+        guard !siblingImageURLs.isEmpty else { return }
+        let idx = currentImageIndex
+        if idx > 0 {
+            let prevURL = siblingImageURLs[idx - 1]
+            self.currentURL = prevURL
+            NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: prevURL)
+        } else {
+            showBanner("At first image")
+        }
+    }
+    
+    // MARK: - Photo Organizing Actions (Keep / Discard / Undo)
+    public func pickCurrentImage(subfolder: String = "_picked") {
+        guard let url = currentURL else { return }
+        let parent = url.deletingLastPathComponent()
+        let destDir = parent.appendingPathComponent(subfolder)
+        let destURL = destDir.appendingPathComponent(url.lastPathComponent)
+        
+        let fm = FileManager.default
+        do {
+            if !fm.fileExists(atPath: destDir.path) {
+                try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
+            }
+            try fm.moveItem(at: url, to: destURL)
+            undoStack.append(.picked(originalURL: url, pickedURL: destURL))
+            
+            showBanner("⭐ Picked → \(subfolder)/\(url.lastPathComponent)")
+            
+            // Advance to next image
+            advanceAfterRemoval(of: url)
+            NotificationCenter.default.post(name: .flashbrowseReloadDirectory, object: nil)
+        } catch {
+            showBanner("⚠️ Failed to pick: \(error.localizedDescription)")
+        }
+    }
+    
+    public func trashCurrentImage() {
+        guard let url = currentURL else { return }
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            undoStack.append(.trashed(originalURL: url))
+            
+            showBanner("🗑️ Discarded \(url.lastPathComponent)")
+            
+            // Advance to next image
+            advanceAfterRemoval(of: url)
+            NotificationCenter.default.post(name: .flashbrowseReloadDirectory, object: nil)
+        } catch {
+            showBanner("⚠️ Failed to trash: \(error.localizedDescription)")
+        }
+    }
+    
+    private func advanceAfterRemoval(of removedURL: URL) {
+        if let idx = siblingImageURLs.firstIndex(of: removedURL) {
+            siblingImageURLs.remove(at: idx)
+            if idx < siblingImageURLs.count {
+                let nextURL = siblingImageURLs[idx]
+                self.currentURL = nextURL
+                NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: nextURL)
+            } else if !siblingImageURLs.isEmpty {
+                let prevURL = siblingImageURLs.last!
+                self.currentURL = prevURL
+                NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: prevURL)
+            } else {
+                self.currentURL = nil
+            }
+        }
+    }
+    
+    public func undoLastAction() {
+        guard let lastAction = undoStack.popLast() else { return }
+        let fm = FileManager.default
+        
+        switch lastAction {
+        case .picked(let originalURL, let pickedURL):
+            do {
+                if fm.fileExists(atPath: pickedURL.path) {
+                    try fm.moveItem(at: pickedURL, to: originalURL)
+                    scanSiblingImages(for: originalURL)
+                    self.currentURL = originalURL
+                    showBanner("↩️ Restored \(originalURL.lastPathComponent)")
+                    NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: originalURL)
+                    NotificationCenter.default.post(name: .flashbrowseReloadDirectory, object: nil)
+                }
+            } catch {
+                showBanner("⚠️ Undo failed: \(error.localizedDescription)")
+            }
+        case .trashed(let originalURL):
+            showBanner("↩️ Trashed item is in macOS Trash (open Trash to put back)")
+            scanSiblingImages(for: originalURL)
+        }
     }
     
     private func loadPreview() {
@@ -178,11 +340,14 @@ public class SharedInspectorState: ObservableObject {
         }
         
         // 5. Image Preview
-        if ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "tiff", "heic", "ico", "psd"].contains(ext) {
+        if Self.imageExtensions.contains(ext) {
             if let img = NSImage(contentsOf: url) {
                 self.contentType = .image
                 self.previewImage = img
                 self.textContent = nil
+                if !siblingImageURLs.contains(url) {
+                    scanSiblingImages(for: url)
+                }
                 return
             }
         }

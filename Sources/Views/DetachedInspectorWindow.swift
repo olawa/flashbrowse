@@ -270,6 +270,56 @@ public struct InspectorView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 190)
                     .padding(.leading, 8)
+                } else if state.contentType == .image {
+                    // Photo Culling & Lightbox Controls
+                    HStack(spacing: 6) {
+                        Text("\(state.currentImageIndex + 1)/\(max(1, state.totalImageCount))")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(cardBgColor)
+                            .cornerRadius(4)
+                        
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                state.isPhotoOrganizerActive.toggle()
+                                if state.isPhotoOrganizerActive {
+                                    state.isLightboxMode = true
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: state.isPhotoOrganizerActive ? "sparkles.rectangle.stack.fill" : "sparkles.rectangle.stack")
+                                Text(state.isPhotoOrganizerActive ? "📸 Culler Active" : "📸 Photo Culler")
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(state.isPhotoOrganizerActive ? Color.green.opacity(0.25) : cardBgColor)
+                            .foregroundColor(state.isPhotoOrganizerActive ? Color.green : .primary)
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Toggle Photo Culler & Organizer mode (Swipe Right to Keep, Swipe Left to Discard)")
+                        
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                state.isLightboxMode.toggle()
+                            }
+                        }) {
+                            Image(systemName: state.isLightboxMode ? "sidebar.right" : "rectangle.inset.filled")
+                                .font(.system(size: 11))
+                                .foregroundColor(state.isLightboxMode ? Color.flashbrowseAccent : .secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(cardBgColor)
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .help(state.isLightboxMode ? "Show Metadata Sidebar" : "Hide Sidebar (100% Lightbox on iPad)")
+                    }
+                    .padding(.leading, 8)
                 }
                 
                 Spacer()
@@ -333,14 +383,19 @@ public struct InspectorView: View {
             )
             
             if let meta = state.metadata {
-                HSplitView {
-                    // Preview Area (Left / Main)
+                if state.isLightboxMode {
                     previewContainer(meta: meta)
-                        .frame(minWidth: 350, maxWidth: .infinity, minHeight: 350)
-                    
-                    // Metadata Panel (Right)
-                    metadataSidebar(meta: meta)
-                        .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    HSplitView {
+                        // Preview Area (Left / Main)
+                        previewContainer(meta: meta)
+                            .frame(minWidth: 350, maxWidth: .infinity, minHeight: 350)
+                        
+                        // Metadata Panel (Right)
+                        metadataSidebar(meta: meta)
+                            .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+                    }
                 }
             } else {
                 emptyState
@@ -377,14 +432,7 @@ public struct InspectorView: View {
             
         case .image:
             if let img = state.previewImage {
-                ScrollView([.horizontal, .vertical]) {
-                    Image(nsImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(16)
-                }
-                .background(contentBgColor)
+                InteractivePhotoView(img: img, meta: meta, isDarkTheme: isDarkTheme)
             }
             
         case .html:
@@ -617,6 +665,483 @@ public struct InspectorView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
+    }
+}
+
+// MARK: - Interactive Touch & Gesture Photo Viewer
+public struct InteractivePhotoView: View {
+    let img: NSImage
+    let meta: ExtendedFileMetadata
+    let isDarkTheme: Bool
+    @ObservedObject var state = SharedInspectorState.shared
+    
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+    
+    // Swipe / Card Dragging
+    @State private var swipeTranslation: CGFloat = 0
+    @State private var isDragging: Bool = false
+    @State private var isHoveringLeftChevron: Bool = false
+    @State private var isHoveringRightChevron: Bool = false
+    
+    public init(img: NSImage, meta: ExtendedFileMetadata, isDarkTheme: Bool) {
+        self.img = img
+        self.meta = meta
+        self.isDarkTheme = isDarkTheme
+    }
+    
+    public var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                // Background
+                (isDarkTheme ? Color(red: 0.05, green: 0.05, blue: 0.06) : Color(nsColor: .textBackgroundColor))
+                    .ignoresSafeArea()
+                
+                // Photo Image with Zoom, Pan, & Swipe Animations
+                Image(nsImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .scaleEffect(scale)
+                    .offset(
+                        x: scale > 1.05 ? offset.width : swipeTranslation,
+                        y: scale > 1.05 ? offset.height : 0
+                    )
+                    .rotationEffect(.degrees(scale <= 1.05 ? Double(swipeTranslation / 24.0) : 0))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(scale <= 1.05 ? 16 : 0)
+                    .contentShape(Rectangle())
+                    // Double Tap Gesture to Toggle Fit vs 2.5x Zoom
+                    .onTapGesture(count: 2) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                            if scale > 1.05 {
+                                scale = 1.0
+                                lastScale = 1.0
+                                offset = .zero
+                                lastOffset = .zero
+                            } else {
+                                scale = 2.5
+                                lastScale = 2.5
+                            }
+                        }
+                    }
+                    // Pinch to Zoom (iPad Touch & Trackpad)
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { val in
+                                let newScale = lastScale * val
+                                scale = min(max(newScale, 0.75), 8.0)
+                            }
+                            .onEnded { _ in
+                                if scale < 1.05 {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        scale = 1.0
+                                        lastScale = 1.0
+                                        offset = .zero
+                                        lastOffset = .zero
+                                    }
+                                } else {
+                                    lastScale = scale
+                                }
+                            }
+                    )
+                    // Drag to Pan (when zoomed) or Swipe / Cull (when at 1.0x)
+                    .simultaneousGesture(
+                        DragGesture()
+                            .onChanged { val in
+                                if scale > 1.05 {
+                                    offset = CGSize(
+                                        width: lastOffset.width + val.translation.width,
+                                        height: lastOffset.height + val.translation.height
+                                    )
+                                } else {
+                                    swipeTranslation = val.translation.width
+                                    isDragging = true
+                                }
+                            }
+                            .onEnded { val in
+                                if scale > 1.05 {
+                                    lastOffset = offset
+                                } else {
+                                    isDragging = false
+                                    let threshold: CGFloat = 85
+                                    if state.isPhotoOrganizerActive {
+                                        if val.translation.width > threshold {
+                                            // Swipe Right -> KEEP / PICK
+                                            withAnimation(.easeOut(duration: 0.18)) {
+                                                swipeTranslation = 600
+                                            }
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                                state.pickCurrentImage()
+                                                swipeTranslation = 0
+                                            }
+                                        } else if val.translation.width < -threshold {
+                                            // Swipe Left -> DISCARD / TRASH
+                                            withAnimation(.easeOut(duration: 0.18)) {
+                                                swipeTranslation = -600
+                                            }
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                                state.trashCurrentImage()
+                                                swipeTranslation = 0
+                                            }
+                                        } else {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                swipeTranslation = 0
+                                            }
+                                        }
+                                    } else {
+                                        // Normal browsing mode: Swipe Left = Next, Swipe Right = Prev
+                                        if val.translation.width > threshold {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                                state.previousImage()
+                                                swipeTranslation = 0
+                                            }
+                                        } else if val.translation.width < -threshold {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                                state.nextImage()
+                                                swipeTranslation = 0
+                                            }
+                                        } else {
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                swipeTranslation = 0
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                    )
+                
+                // Side Quick-Touch Navigation Chevrons (Left & Right)
+                if scale <= 1.05 {
+                    HStack {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                                state.previousImage()
+                            }
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 48, height: 80)
+                                .background(Color.black.opacity(isHoveringLeftChevron ? 0.6 : 0.25))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .padding(.leading, 12)
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { isHoveringLeftChevron = $0 }
+                        .disabled(state.currentImageIndex <= 0)
+                        .opacity(state.currentImageIndex <= 0 ? 0.15 : 0.85)
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                                state.nextImage()
+                            }
+                        }) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 48, height: 80)
+                                .background(Color.black.opacity(isHoveringRightChevron ? 0.6 : 0.25))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .padding(.trailing, 12)
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { isHoveringRightChevron = $0 }
+                        .disabled(state.currentImageIndex >= state.totalImageCount - 1)
+                        .opacity(state.currentImageIndex >= state.totalImageCount - 1 ? 0.15 : 0.85)
+                    }
+                }
+                
+                // Dynamic Swipe Badges (KEEP / DISCARD in Organizer Mode)
+                if state.isPhotoOrganizerActive && scale <= 1.05 && swipeTranslation != 0 {
+                    if swipeTranslation > 25 {
+                        VStack {
+                            HStack {
+                                Text("⭐ KEEP")
+                                    .font(.system(size: 26, weight: .black))
+                                    .foregroundColor(.green)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color.black.opacity(0.75))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.green, lineWidth: 3)
+                                    )
+                                    .cornerRadius(10)
+                                    .rotationEffect(.degrees(-15))
+                                    .opacity(min(1.0, Double(swipeTranslation) / 80.0))
+                                    .padding(32)
+                                Spacer()
+                            }
+                            Spacer()
+                        }
+                    } else if swipeTranslation < -25 {
+                        VStack {
+                            HStack {
+                                Spacer()
+                                Text("🗑️ DISCARD")
+                                    .font(.system(size: 26, weight: .black))
+                                    .foregroundColor(.red)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color.black.opacity(0.75))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.red, lineWidth: 3)
+                                    )
+                                    .cornerRadius(10)
+                                    .rotationEffect(.degrees(15))
+                                    .opacity(min(1.0, Double(-swipeTranslation) / 80.0))
+                                    .padding(32)
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+                
+                // Floating Action Toast Banner
+                if let banner = state.photoActionBanner {
+                    VStack {
+                        Text(banner)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.black.opacity(0.85))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                            .shadow(radius: 8)
+                            .padding(.top, 16)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        Spacer()
+                    }
+                }
+                
+                // Big Touch HUD Control Bar at Bottom
+                VStack {
+                    Spacer()
+                    touchControlBar
+                        .padding(.bottom, 16)
+                }
+            }
+        }
+        .focusable()
+        // Keyboard Shortcuts for Rapid Culling & Navigation
+        .onKeyPress(.leftArrow) {
+            state.previousImage()
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            state.nextImage()
+            return .handled
+        }
+        .onKeyPress(.space) {
+            if state.isPhotoOrganizerActive {
+                state.pickCurrentImage()
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(.delete) {
+            if state.isPhotoOrganizerActive {
+                state.trashCurrentImage()
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress("u") {
+            if state.canUndo {
+                state.undoLastAction()
+                return .handled
+            }
+            return .ignored
+        }
+    }
+    
+    // MARK: - Big Touch Control Bar for iPad / Mouse
+    private var touchControlBar: some View {
+        HStack(spacing: 10) {
+            if state.isPhotoOrganizerActive {
+                // 🔴 Discard Button
+                Button(action: {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        state.trashCurrentImage()
+                    }
+                }) {
+                    VStack(spacing: 2) {
+                        Image(systemName: "trash.fill")
+                            .font(.system(size: 18, weight: .bold))
+                        Text("Discard")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 68, height: 48)
+                    .background(Color.red)
+                    .cornerRadius(10)
+                    .shadow(color: .red.opacity(0.4), radius: 4)
+                }
+                .buttonStyle(.plain)
+                .help("Move photo to Trash (Swipe Left / Delete)")
+                
+                // ◀️ Prev Button
+                Button(action: { state.previousImage() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 48)
+                        .background(Color.white.opacity(0.18))
+                        .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                .disabled(state.currentImageIndex <= 0)
+                .opacity(state.currentImageIndex <= 0 ? 0.35 : 1.0)
+                
+                // Index Info & Help Pill
+                VStack(spacing: 1) {
+                    Text("\(state.currentImageIndex + 1) / \(max(1, state.totalImageCount))")
+                        .font(.system(size: 13, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                    Text("Swipe or Tap")
+                        .font(.system(size: 9))
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .padding(.horizontal, 8)
+                
+                // ↩️ Undo Button
+                if state.canUndo {
+                    Button(action: { state.undoLastAction() }) {
+                        VStack(spacing: 2) {
+                            Image(systemName: "arrow.uturn.backward")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("Undo")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 48)
+                        .background(Color.orange.opacity(0.9))
+                        .cornerRadius(10)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Undo last action (Cmd+Z)")
+                }
+                
+                // ▶️ Next Button
+                Button(action: { state.nextImage() }) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 48)
+                        .background(Color.white.opacity(0.18))
+                        .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                .disabled(state.currentImageIndex >= state.totalImageCount - 1)
+                .opacity(state.currentImageIndex >= state.totalImageCount - 1 ? 0.35 : 1.0)
+                
+                // 🟢 Keep Button
+                Button(action: {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        state.pickCurrentImage()
+                    }
+                }) {
+                    VStack(spacing: 2) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 18, weight: .bold))
+                        Text("Keep")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 68, height: 48)
+                    .background(Color.green)
+                    .cornerRadius(10)
+                    .shadow(color: .green.opacity(0.4), radius: 4)
+                }
+                .buttonStyle(.plain)
+                .help("Keep photo in _picked folder (Swipe Right / Space)")
+            } else {
+                // Normal Preview Touch Controls
+                Button(action: { state.previousImage() }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                        Text("Prev")
+                    }
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.18))
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                .disabled(state.currentImageIndex <= 0)
+                .opacity(state.currentImageIndex <= 0 ? 0.35 : 1.0)
+                
+                Text("\(state.currentImageIndex + 1) of \(max(1, state.totalImageCount))")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                
+                Button(action: { state.nextImage() }) {
+                    HStack(spacing: 4) {
+                        Text("Next")
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.18))
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                .disabled(state.currentImageIndex >= state.totalImageCount - 1)
+                .opacity(state.currentImageIndex >= state.totalImageCount - 1 ? 0.35 : 1.0)
+                
+                Divider().frame(height: 18)
+                
+                // Zoom Toggle Button
+                Button(action: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        if scale > 1.05 {
+                            scale = 1.0
+                            lastScale = 1.0
+                            offset = .zero
+                            lastOffset = .zero
+                        } else {
+                            scale = 2.5
+                            lastScale = 2.5
+                        }
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: scale > 1.05 ? "minus.magnifyingglass" : "plus.magnifyingglass")
+                        Text(scale > 1.05 ? "Fit" : "2.5x")
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.18))
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                .help("Toggle Zoom (Double Tap / Pinch)")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.black.opacity(0.8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                )
+        )
+        .shadow(color: .black.opacity(0.5), radius: 10, y: 5)
     }
 }
 

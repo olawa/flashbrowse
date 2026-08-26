@@ -28,4 +28,6 @@ public extension String {
 public extension Notification.Name {
     static let flashbrowseSwitchWorkspace = Notification.Name("flashbrowseSwitchWorkspace")
     static let flashbrowseSaveWorkspace = Notification.Name("flashbrowseSaveWorkspace")
+    static let flashbrowseInspectorSelectedURL = Notification.Name("flashbrowseInspectorSelectedURL")
+    static let flashbrowseReloadDirectory = Notification.Name("flashbrowseReloadDirectory")
 }
