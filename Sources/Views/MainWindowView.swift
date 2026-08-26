@@ -6,11 +6,13 @@ public struct MainWindowView: View {
     @ObservedObject private var indexService = IndexService.shared
     @ObservedObject private var sshService = SSHService.shared
     @ObservedObject private var terminalService = TerminalService.shared
+    @ObservedObject private var inspectorState = SharedInspectorState.shared
     @State private var activePane: ActivePane = .left
     @State private var isDualPane: Bool = false
     @State private var isCommanderMode: Bool = false
     @State private var showingBatchRename: Bool = false
     @State private var isCommandPaletteOpen: Bool = false
+    @AppStorage("flashbrowse_side_inspector_open") private var isSideInspectorOpen: Bool = true
     
     public init() {}
     
@@ -23,26 +25,40 @@ public struct MainWindowView: View {
             NavigationSplitView {
                 SidebarView(state: currentActiveState)
             } detail: {
-                VStack(spacing: 0) {
-                    if sshService.isRemoteBrowserOpen {
-                        RemoteBrowserView(localState: currentActiveState)
-                    } else if indexService.activeIndex != nil {
-                        IndexBrowserView(navState: currentActiveState)
-                    } else {
-                        DualPaneContainerView(
-                            leftState: leftState,
-                            rightState: rightState,
-                            activePane: $activePane,
-                            isDualPane: $isDualPane,
-                            isCommanderMode: $isCommanderMode
-                        )
+                HSplitView {
+                    VStack(spacing: 0) {
+                        if sshService.isRemoteBrowserOpen {
+                            RemoteBrowserView(localState: currentActiveState)
+                        } else if indexService.activeIndex != nil {
+                            IndexBrowserView(navState: currentActiveState)
+                        } else {
+                            DualPaneContainerView(
+                                leftState: leftState,
+                                rightState: rightState,
+                                activePane: $activePane,
+                                isDualPane: $isDualPane,
+                                isCommanderMode: $isCommanderMode
+                            )
+                        }
+                        
+                        // Embedded Terminal Drawer (VS Code style)
+                        if terminalService.isOpen {
+                            Divider()
+                            TerminalPanelView()
+                                .transition(.move(edge: .bottom))
+                        }
                     }
+                    .frame(minWidth: 420)
                     
-                    // Embedded Terminal Drawer (VS Code style)
-                    if terminalService.isOpen {
-                        Divider()
-                        TerminalPanelView()
-                            .transition(.move(edge: .bottom))
+                    // Embedded Side Inspector Panel (Default ON)
+                    if isSideInspectorOpen && !inspectorState.isInspectorWindowOpen {
+                        InspectorView(isEmbeddedSidePanel: true, onClose: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                isSideInspectorOpen = false
+                            }
+                        })
+                        .frame(minWidth: 260, idealWidth: 320, maxWidth: 550)
+                        .transition(.move(edge: .trailing))
                     }
                 }
             }
@@ -179,13 +195,25 @@ public struct MainWindowView: View {
                 }
                 .help("Batch Rename Tool (Cmd+Shift+R)")
                 
-                // Detached Multi-Monitor Inspector
+                // Integrated Side Inspector Panel Toggle (Cmd+I)
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        isSideInspectorOpen.toggle()
+                    }
+                }) {
+                    Image(systemName: "sidebar.right")
+                        .foregroundColor(isSideInspectorOpen && !inspectorState.isInspectorWindowOpen ? Color.flashbrowseAccent : .primary)
+                }
+                .help("Toggle Inspector Side Panel (Cmd+I)")
+                
+                // Detached Multi-Monitor / iPad Inspector (Cmd+Option+I)
                 Button(action: {
                     InspectorWindowController.shared.toggleWindow()
                 }) {
                     Image(systemName: "display.2")
+                        .foregroundColor(inspectorState.isInspectorWindowOpen ? Color.flashbrowseAccent : .primary)
                 }
-                .help("Open Live Inspector on External Monitor (Cmd+Option+I)")
+                .help("Pop Out Inspector to iPad or External Monitor (Cmd+Option+I)")
             }
         }
         .sheet(isPresented: $showingBatchRename) {
@@ -199,6 +227,7 @@ public struct MainWindowView: View {
         }
         // Keyboard Shortcuts
         .keyboardShortcut("d", modifiers: .command)
+        .keyboardShortcut("i", modifiers: .command)
         .onCommand(#selector(NSResponder.selectAll(_:))) {
             currentActiveState.selectedURLs = Set(currentActiveState.filteredItems.map { $0.url })
         }

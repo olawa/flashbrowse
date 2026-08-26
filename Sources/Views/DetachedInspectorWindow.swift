@@ -221,7 +221,13 @@ public struct InspectorView: View {
     @AppStorage("flashbrowse_inspector_dark_theme") private var isDarkTheme: Bool = true
     @State private var tableFilter: String = ""
     
-    public init() {}
+    public var isEmbeddedSidePanel: Bool
+    public var onClose: (() -> Void)?
+    
+    public init(isEmbeddedSidePanel: Bool = false, onClose: (() -> Void)? = nil) {
+        self.isEmbeddedSidePanel = isEmbeddedSidePanel
+        self.onClose = onClose
+    }
     
     // Theme Palette Colors
     private var bgColor: Color {
@@ -243,41 +249,41 @@ public struct InspectorView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
-            HStack(spacing: 8) {
-                Image(systemName: "display.2")
+            HStack(spacing: 6) {
+                Image(systemName: isEmbeddedSidePanel ? "sidebar.right" : "display.2")
                     .foregroundColor(Color.flashbrowseAccent)
-                    .font(.system(size: 14))
+                    .font(.system(size: 13))
                 
-                Text(state.metadata?.name ?? "No Selection")
-                    .font(.system(size: 13, weight: .bold))
+                Text(state.metadata?.name ?? "Inspector")
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundColor(isDarkTheme ? .white : .primary)
                     .lineLimit(1)
                 
                 // Toggle Rendered vs Source / Grid
                 if state.contentType == .markdown || state.contentType == .html {
                     Picker("", selection: $renderMode) {
-                        Text("👁 Rendered").tag(0)
-                        Text("💻 Source").tag(1)
+                        Text("Rendered").tag(0)
+                        Text("Source").tag(1)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 170)
-                    .padding(.leading, 8)
+                    .frame(width: isEmbeddedSidePanel ? 130 : 160)
+                    .padding(.leading, 2)
                 } else if state.contentType == .spreadsheet && !state.parsedTableRows.isEmpty {
                     Picker("", selection: $renderMode) {
-                        Text("📊 Grid Table").tag(0)
-                        Text("👁 Native Sheet").tag(1)
+                        Text("Grid").tag(0)
+                        Text("Sheet").tag(1)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 190)
-                    .padding(.leading, 8)
+                    .frame(width: isEmbeddedSidePanel ? 120 : 160)
+                    .padding(.leading, 2)
                 } else if state.contentType == .image {
                     // Photo Culling & Lightbox Controls
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         Text("\(state.currentImageIndex + 1)/\(max(1, state.totalImageCount))")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundColor(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
                             .background(cardBgColor)
                             .cornerRadius(4)
                         
@@ -289,19 +295,19 @@ public struct InspectorView: View {
                                 }
                             }
                         }) {
-                            HStack(spacing: 3) {
+                            HStack(spacing: 2) {
                                 Image(systemName: state.isPhotoOrganizerActive ? "sparkles.rectangle.stack.fill" : "sparkles.rectangle.stack")
-                                Text(state.isPhotoOrganizerActive ? "📸 Culler Active" : "📸 Photo Culler")
+                                Text(state.isPhotoOrganizerActive ? "Culler" : "Cull")
                                     .font(.system(size: 10, weight: .bold))
                             }
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
                             .background(state.isPhotoOrganizerActive ? Color.green.opacity(0.25) : cardBgColor)
                             .foregroundColor(state.isPhotoOrganizerActive ? Color.green : .primary)
                             .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
-                        .help("Toggle Photo Culler & Organizer mode (Swipe Right to Keep, Swipe Left to Discard)")
+                        .help("Toggle Photo Culler mode")
                         
                         Button(action: {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
@@ -309,75 +315,92 @@ public struct InspectorView: View {
                             }
                         }) {
                             Image(systemName: state.isLightboxMode ? "sidebar.right" : "rectangle.inset.filled")
-                                .font(.system(size: 11))
+                                .font(.system(size: 10))
                                 .foregroundColor(state.isLightboxMode ? Color.flashbrowseAccent : .secondary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
                                 .background(cardBgColor)
                                 .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
-                        .help(state.isLightboxMode ? "Show Metadata Sidebar" : "Hide Sidebar (100% Lightbox on iPad)")
+                        .help(state.isLightboxMode ? "Show Metadata Sidebar" : "Hide Sidebar")
                     }
-                    .padding(.leading, 8)
+                    .padding(.leading, 2)
                 }
                 
                 Spacer()
+                
+                // If embedded, button to Pop Out to iPad / External Window
+                if isEmbeddedSidePanel {
+                    Button(action: {
+                        InspectorWindowController.shared.showWindow()
+                    }) {
+                        Image(systemName: "display.2")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 3)
+                            .background(cardBgColor)
+                            .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Pop Out Inspector to iPad or External Monitor (Cmd+Option+I)")
+                }
                 
                 // Dark Theme Toggle
                 Button(action: {
                     isDarkTheme.toggle()
                 }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: isDarkTheme ? "moon.stars.fill" : "sun.max.fill")
-                            .foregroundColor(isDarkTheme ? .yellow : .orange)
-                        Text(isDarkTheme ? "Dark" : "Light")
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(cardBgColor)
-                    .cornerRadius(4)
+                    Image(systemName: isDarkTheme ? "moon.stars.fill" : "sun.max.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(isDarkTheme ? .yellow : .orange)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 3)
+                        .background(cardBgColor)
+                        .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
-                .help("Toggle Inspector Dark/Light Theme")
+                .help("Toggle Inspector Theme")
                 
-                // Jump to Main Window Button
-                Button(action: {
-                    InspectorWindowController.shared.warpMouseToMainWindow()
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "cursorarrow.motionlines")
-                        Text("Jump to Browser (Cmd+<)")
-                            .font(.system(size: 10, weight: .medium))
+                if !isEmbeddedSidePanel {
+                    // Jump to Main Window Button (only in detached window)
+                    Button(action: {
+                        InspectorWindowController.shared.warpMouseToMainWindow()
+                    }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "cursorarrow.motionlines")
+                            Text("Jump (Cmd+<)")
+                                .font(.system(size: 9, weight: .medium))
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 3)
+                        .background(cardBgColor)
+                        .cornerRadius(4)
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(cardBgColor)
-                    .cornerRadius(4)
+                    .buttonStyle(.plain)
+                    .help("Teleport cursor to main window (Cmd+<)")
+                } else {
+                    // Close side panel button
+                    Button(action: {
+                        onClose?()
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .padding(4)
+                            .background(cardBgColor)
+                            .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close Inspector Side Panel")
                 }
-                .buttonStyle(.plain)
-                .help("Teleport cursor and focus back to main Flashbrowse window (Cmd+<)")
-                
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 7, height: 7)
-                    Text("LIVE SYNC")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(cardBgColor)
-                .cornerRadius(4)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
             .background(bgColor)
             .overlay(
                 Rectangle()
-                    .frame(height: 0.5)
+                    .frame(height: 1)
                     .foregroundColor(borderColor),
                 alignment: .bottom
             )

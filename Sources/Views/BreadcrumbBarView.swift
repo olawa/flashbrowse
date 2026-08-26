@@ -234,19 +234,6 @@ public struct BreadcrumbBarView: View {
                     .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
             )
             
-            // Detached Inspector Button (Multi-Monitor)
-            Button(action: {
-                InspectorWindowController.shared.toggleWindow()
-            }) {
-                Image(systemName: "display.2")
-                    .font(.system(size: 12))
-                    .frame(width: 26, height: 26)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
-            .help("Open Inspector Window (Cmd+Option+I) for external monitor")
-            
             // 📌 Pin Window (Always on Top) Toolbar Button
             Button(action: {
                 state.togglePinWindow()
