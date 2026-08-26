@@ -11,7 +11,9 @@ struct SidebarLocation: Identifiable {
 public struct SidebarView: View {
     @ObservedObject var state: NavigationState
     @ObservedObject var indexService = IndexService.shared
+    @ObservedObject var sshService = SSHService.shared
     @State private var isDropTargeted: Bool = false
+    @State private var showingAddSSHHost: Bool = false
     
     private var standardLocations: [SidebarLocation] {
         let fm = FileManager.default
@@ -73,6 +75,47 @@ public struct SidebarView: View {
                         
                         ForEach(standardLocations) { loc in
                             sidebarRow(name: loc.name, icon: loc.icon, url: loc.url)
+                        }
+                    }
+                    
+                    // Remote / SSH Servers
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text("REMOTE / SSH")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.secondary)
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                showingAddSSHHost = true
+                            }) {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Add new SSH Server connection")
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 2)
+                        
+                        if sshService.savedHosts.isEmpty {
+                            Button(action: { showingAddSSHHost = true }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "plus")
+                                    Text("Add SSH Host")
+                                }
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                                .padding(.vertical, 4)
+                                .padding(.horizontal, 10)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            ForEach(sshService.savedHosts) { host in
+                                sshHostRow(for: host)
+                            }
                         }
                     }
                     
@@ -166,6 +209,74 @@ public struct SidebarView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .frame(minWidth: 180, idealWidth: 210, maxWidth: 260)
+        .sheet(isPresented: $showingAddSSHHost) {
+            AddSSHHostView()
+        }
+    }
+    
+    @ViewBuilder
+    private func sshHostRow(for host: SSHHost) -> some View {
+        let isConnected = sshService.activeHost?.alias == host.alias
+        
+        Button(action: {
+            indexService.clearIndex()
+            if isConnected {
+                sshService.disconnect()
+            } else {
+                sshService.connect(to: host)
+            }
+        }) {
+            HStack(spacing: 7) {
+                Image(systemName: isConnected ? "network" : "server.rack")
+                    .foregroundColor(isConnected ? .white : Color.green)
+                    .font(.system(size: 12))
+                    .frame(width: 18)
+                
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(host.alias)
+                        .font(.system(size: 11, weight: isConnected ? .bold : .medium))
+                        .lineLimit(1)
+                }
+                
+                Spacer()
+                
+                if isConnected {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isConnected ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+            )
+            .foregroundColor(isConnected ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(isConnected ? "Disconnect" : "Connect") {
+                if isConnected {
+                    sshService.disconnect()
+                } else {
+                    sshService.connect(to: host)
+                }
+            }
+            
+            Button("Open Remote Terminal") {
+                TerminalService.shared.isOpen = true
+                TerminalService.shared.executeCommand("ssh \(host.alias)")
+            }
+            
+            Divider()
+            
+            Button(role: .destructive, action: {
+                sshService.removeHost(alias: host.alias)
+            }) {
+                Label("Remove Host", systemImage: "trash")
+            }
+        }
     }
     
     @ViewBuilder
@@ -173,6 +284,7 @@ public struct SidebarView: View {
         let isSelected = indexService.activeIndex?.id == index.id
         
         Button(action: {
+            sshService.disconnect()
             if isSelected {
                 indexService.clearIndex()
             } else {
@@ -210,10 +322,11 @@ public struct SidebarView: View {
     
     @ViewBuilder
     private func sidebarRow(name: String, icon: String, url: URL) -> some View {
-        let isSelected = indexService.activeIndex == nil && state.currentDirectory.path == url.path
+        let isSelected = indexService.activeIndex == nil && !sshService.isRemoteBrowserOpen && state.currentDirectory.path == url.path
         
         Button(action: {
             indexService.clearIndex()
+            sshService.disconnect()
             state.navigateTo(url: url)
         }) {
             HStack(spacing: 8) {
@@ -240,10 +353,11 @@ public struct SidebarView: View {
     
     @ViewBuilder
     private func favoriteRow(for bookmark: BookmarkItem) -> some View {
-        let isSelected = indexService.activeIndex == nil && state.currentDirectory.path == bookmark.url.path
+        let isSelected = indexService.activeIndex == nil && !sshService.isRemoteBrowserOpen && state.currentDirectory.path == bookmark.url.path
         
         Button(action: {
             indexService.clearIndex()
+            sshService.disconnect()
             state.navigateTo(url: bookmark.url)
         }) {
             HStack(spacing: 8) {

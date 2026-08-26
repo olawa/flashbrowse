@@ -4,6 +4,7 @@ public struct MainWindowView: View {
     @StateObject private var leftState = NavigationState()
     @StateObject private var rightState = NavigationState()
     @ObservedObject private var indexService = IndexService.shared
+    @ObservedObject private var sshService = SSHService.shared
     @ObservedObject private var terminalService = TerminalService.shared
     @State private var activePane: ActivePane = .left
     @State private var isDualPane: Bool = false
@@ -23,7 +24,9 @@ public struct MainWindowView: View {
                 SidebarView(state: currentActiveState)
             } detail: {
                 VStack(spacing: 0) {
-                    if indexService.activeIndex != nil {
+                    if sshService.isRemoteBrowserOpen {
+                        RemoteBrowserView(localState: currentActiveState)
+                    } else if indexService.activeIndex != nil {
                         IndexBrowserView(navState: currentActiveState)
                     } else {
                         DualPaneContainerView(
@@ -43,8 +46,16 @@ public struct MainWindowView: View {
                     }
                 }
             }
-            .navigationTitle(indexService.activeIndex != nil ? "Index: \(indexService.activeIndex!.name)" : (currentActiveState.currentDirectory.lastPathComponent.isEmpty ? "/" : currentActiveState.currentDirectory.lastPathComponent))
-            .navigationSubtitle(indexService.activeIndex != nil ? "\(indexService.totalFilesFound) matching files across workspace" : currentActiveState.currentDirectory.path)
+            .navigationTitle(
+                sshService.isRemoteBrowserOpen
+                ? "SSH: \(sshService.activeHost?.alias ?? "Remote")"
+                : (indexService.activeIndex != nil ? "Index: \(indexService.activeIndex!.name)" : (currentActiveState.currentDirectory.lastPathComponent.isEmpty ? "/" : currentActiveState.currentDirectory.lastPathComponent))
+            )
+            .navigationSubtitle(
+                sshService.isRemoteBrowserOpen
+                ? "\(sshService.activeHost?.connectionString ?? ""):\(sshService.currentRemotePath)"
+                : (indexService.activeIndex != nil ? "\(indexService.totalFilesFound) matching files across workspace" : currentActiveState.currentDirectory.path)
+            )
             .frame(minWidth: 800, minHeight: 520)
             
             // Command Palette Overlay (Cmd+K / Cmd+P)
@@ -132,7 +143,7 @@ public struct MainWindowView: View {
                 .help("Toggle Integrated Terminal (Cmd+J)")
                 
                 // Dual Pane Toggle (only in normal view)
-                if indexService.activeIndex == nil {
+                if indexService.activeIndex == nil && !sshService.isRemoteBrowserOpen {
                     Button(action: {
                         isDualPane.toggle()
                     }) {
