@@ -324,13 +324,17 @@ public struct InspectorView: View {
                 
                 Spacer()
                 
-                // Dock alongside main window / Move to iPad button
+                // Tile / iPad button
                 Button(action: {
-                    InspectorWindowController.shared.moveToExternalOrIPad()
+                    if NSScreen.screens.count > 1 {
+                        InspectorWindowController.shared.moveToExternalOrIPad()
+                    } else {
+                        InspectorWindowController.shared.tileAlongsideMainWindow()
+                    }
                 }) {
                     HStack(spacing: 3) {
-                        Image(systemName: NSScreen.screens.count > 1 ? "ipad.and.arrow.forward" : "arrow.right.to.line.compact")
-                        Text(NSScreen.screens.count > 1 ? "iPad" : "Snap")
+                        Image(systemName: NSScreen.screens.count > 1 ? "ipad.and.arrow.forward" : "rectangle.split.2x1")
+                        Text(NSScreen.screens.count > 1 ? "iPad" : "Tile")
                             .font(.system(size: 10, weight: .semibold))
                     }
                     .padding(.horizontal, 5)
@@ -339,7 +343,7 @@ public struct InspectorView: View {
                     .cornerRadius(4)
                 }
                 .buttonStyle(.plain)
-                .help(NSScreen.screens.count > 1 ? "Move to iPad or External Screen" : "Snap alongside Flashbrowse window")
+                .help(NSScreen.screens.count > 1 ? "Move to iPad or External Screen" : "Tile side-by-side with Flashbrowse browser (Zero Overlap)")
                 
                 // Dark Theme Toggle
                 Button(action: {
@@ -1176,36 +1180,9 @@ public class InspectorHostingView<Content: View>: NSHostingView<Content> {
 public class InspectorWindowController: NSObject, NSWindowDelegate {
     public static let shared = InspectorWindowController()
     public var window: NSWindow?
-    public var isDocked: Bool = true
     
     public override init() {
         super.init()
-        setupObservers()
-    }
-    
-    private func setupObservers() {
-        // When main window moves or resizes, companion inspector follows along if docked
-        NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: nil, queue: .main) { [weak self] notif in
-            Task { @MainActor [weak self] in
-                guard let self = self, let win = self.window, win.isVisible, self.isDocked else { return }
-                if let movedWin = notif.object as? NSWindow, movedWin != win, !(movedWin is NSPanel) {
-                    if movedWin.screen == win.screen {
-                        self.dockAlongside(mainWindow: movedWin)
-                    }
-                }
-            }
-        }
-        
-        NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: nil, queue: .main) { [weak self] notif in
-            Task { @MainActor [weak self] in
-                guard let self = self, let win = self.window, win.isVisible, self.isDocked else { return }
-                if let resizedWin = notif.object as? NSWindow, resizedWin != win, !(resizedWin is NSPanel) {
-                    if resizedWin.screen == win.screen {
-                        self.dockAlongside(mainWindow: resizedWin)
-                    }
-                }
-            }
-        }
     }
     
     public func toggleWindow() {
@@ -1219,8 +1196,11 @@ public class InspectorWindowController: NSObject, NSWindowDelegate {
     
     public func showWindow() {
         if window == nil {
+            let defaultWidth: CGFloat = 850
+            let defaultHeight: CGFloat = 650
+            
             let win = NSWindow(
-                contentRect: NSRect(x: 100, y: 100, width: 500, height: 700),
+                contentRect: NSRect(x: 100, y: 100, width: defaultWidth, height: defaultHeight),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
@@ -1230,7 +1210,22 @@ public class InspectorWindowController: NSObject, NSWindowDelegate {
             win.acceptsMouseMovedEvents = true
             win.contentView = InspectorHostingView(rootView: InspectorView())
             win.delegate = self
+            
+            // Frame Autosave: persistently remembers position & size across app launches
+            win.setFrameAutosaveName("FlashbrowseInspectorWindow")
+            
             self.window = win
+            
+            // If first launch without a saved position:
+            let hasSavedFrame = UserDefaults.standard.string(forKey: "NSWindow Frame FlashbrowseInspectorWindow") != nil
+            if !hasSavedFrame {
+                let screens = NSScreen.screens
+                if screens.count > 1, let externalScreen = screens.first(where: { $0 != NSScreen.main }) {
+                    win.setFrame(externalScreen.visibleFrame, display: true)
+                } else if NSApp.windows.contains(where: { $0 != win && $0.isVisible && !($0 is NSPanel) }) {
+                    tileAlongsideMainWindow()
+                }
+            }
         }
         
         guard let win = window else { return }
@@ -1238,50 +1233,38 @@ public class InspectorWindowController: NSObject, NSWindowDelegate {
         // Match window level with Pinning / Always on Top
         updateWindowLevel()
         
-        // Multi-monitor / iPad Sidecar check:
-        let screens = NSScreen.screens
-        if screens.count > 1, let externalScreen = screens.first(where: { $0 != NSScreen.main }) {
-            win.setFrame(externalScreen.visibleFrame, display: true, animate: false)
-            self.isDocked = false
-        } else {
-            // Single screen: dock cleanly alongside the main window!
-            if let mainWin = NSApp.windows.first(where: { $0 != win && $0.isVisible && !($0 is NSPanel) }) {
-                dockAlongside(mainWindow: mainWin)
-            }
-            self.isDocked = true
-        }
-        
         win.makeKeyAndOrderFront(nil)
         SharedInspectorState.shared.isInspectorWindowOpen = true
     }
     
-    public func dockAlongside(mainWindow: NSWindow) {
-        guard let win = window, win.isVisible else { return }
-        guard let screen = mainWindow.screen ?? NSScreen.main else { return }
-        let mainFrame = mainWindow.frame
-        let screenVisible = screen.visibleFrame
+    public func tileAlongsideMainWindow() {
+        guard let win = window else { return }
+        guard let mainWin = NSApp.windows.first(where: { $0 != win && $0.isVisible && !($0 is NSPanel) }) else { return }
+        guard let screen = mainWin.screen ?? NSScreen.main else { return }
         
-        let desiredWidth: CGFloat = min(max(win.frame.width, 420), 650)
-        let spacing: CGFloat = 2
+        let screenFrame = screen.visibleFrame
+        let spacing: CGFloat = 6
+        let totalWidth = screenFrame.width - spacing
         
-        var newX = mainFrame.maxX + spacing
-        let newY = mainFrame.minY
-        let newHeight = mainFrame.height
-        var newWidth = desiredWidth
+        // Browser on Left (52%), Inspector on Right (48%)
+        let mainWidth = floor(totalWidth * 0.52)
+        let mainRect = NSRect(
+            x: screenFrame.minX,
+            y: screenFrame.minY,
+            width: mainWidth,
+            height: screenFrame.height
+        )
         
-        // If it goes beyond the right edge of screen, adjust main window or fit width
-        if newX + newWidth > screenVisible.maxX {
-            let overflow = (newX + newWidth) - screenVisible.maxX
-            if mainFrame.minX - overflow >= screenVisible.minX {
-                mainWindow.setFrame(NSRect(x: mainFrame.minX - overflow, y: mainFrame.minY, width: mainFrame.width, height: mainFrame.height), display: true)
-                newX = (mainFrame.minX - overflow) + mainFrame.width + spacing
-            } else {
-                newWidth = max(360, screenVisible.maxX - newX)
-            }
-        }
+        let inspWidth = totalWidth - mainWidth
+        let inspRect = NSRect(
+            x: screenFrame.minX + mainWidth + spacing,
+            y: screenFrame.minY,
+            width: inspWidth,
+            height: screenFrame.height
+        )
         
-        win.setFrame(NSRect(x: newX, y: newY, width: newWidth, height: newHeight), display: true)
-        self.isDocked = true
+        mainWin.setFrame(mainRect, display: true, animate: true)
+        win.setFrame(inspRect, display: true, animate: true)
     }
     
     public func moveToExternalOrIPad() {
@@ -1289,12 +1272,8 @@ public class InspectorWindowController: NSObject, NSWindowDelegate {
         let screens = NSScreen.screens
         if screens.count > 1, let externalScreen = screens.first(where: { $0 != NSScreen.main }) {
             win.setFrame(externalScreen.visibleFrame, display: true, animate: true)
-            self.isDocked = false
         } else {
-            // Single screen: re-dock
-            if let mainWin = NSApp.windows.first(where: { $0 != win && $0.isVisible && !($0 is NSPanel) }) {
-                dockAlongside(mainWindow: mainWin)
-            }
+            tileAlongsideMainWindow()
         }
     }
     
