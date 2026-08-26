@@ -16,6 +16,7 @@ xcrun swiftc -O -module-cache-path ./cache \
     -framework Quartz \
     -framework QuickLookUI \
     -framework WebKit \
+    -framework PDFKit \
     -o Flashbrowse
 
 echo "📦 Packaging Flashbrowse.app..."

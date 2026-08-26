@@ -63,6 +63,10 @@ public struct ExtendedFileMetadata {
 
 public enum InspectorContentType {
     case image
+    case pdf
+    case spreadsheet
+    case officeDoc
+    case media
     case markdown
     case html
     case code
@@ -85,6 +89,7 @@ public class SharedInspectorState: ObservableObject {
     @Published public var contentType: InspectorContentType = .generic
     @Published public var textContent: String?
     @Published public var previewImage: NSImage?
+    @Published public var parsedTableRows: [[String]] = []
     @Published public var isInspectorWindowOpen: Bool = false
     
     // Remote Scroll Channel
@@ -109,10 +114,12 @@ public class SharedInspectorState: ObservableObject {
             contentType = .generic
             textContent = nil
             previewImage = nil
+            parsedTableRows = []
             return
         }
         
         self.metadata = ExtendedFileMetadata(url: url)
+        self.parsedTableRows = []
         
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
@@ -124,8 +131,54 @@ public class SharedInspectorState: ObservableObject {
         
         let ext = url.pathExtension.lowercased()
         
-        // Image Preview
-        if ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "tiff", "heic", "ico"].contains(ext) {
+        // 1. PDF Documents
+        if ext == "pdf" {
+            self.contentType = .pdf
+            self.textContent = nil
+            self.previewImage = nil
+            return
+        }
+        
+        // 2. Spreadsheet Documents (Excel .xlsx, .xls, Numbers, CSV, TSV)
+        if ["xlsx", "xls", "numbers", "csv", "tsv", "tab"].contains(ext) {
+            self.contentType = .spreadsheet
+            self.previewImage = nil
+            
+            // For CSV/TSV: parse fast structured table preview
+            if ["csv", "tsv", "tab"].contains(ext) {
+                if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
+                   let str = String(data: data.prefix(500000), encoding: .utf8) {
+                    let delimiter: Character = (ext == "csv") ? "," : "\t"
+                    let rows = str.components(separatedBy: "\n").prefix(200).compactMap { line -> [String]? in
+                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmed.isEmpty { return nil }
+                        return trimmed.split(separator: delimiter, omittingEmptySubsequences: false).map(String.init)
+                    }
+                    self.parsedTableRows = rows
+                    self.textContent = str
+                }
+            }
+            return
+        }
+        
+        // 3. Office & Rich Documents (Word .docx, .doc, Pages, Keynote, PPTX, RTF)
+        if ["docx", "doc", "pages", "rtf", "rtfd", "odt", "pptx", "ppt", "keynote"].contains(ext) {
+            self.contentType = .officeDoc
+            self.textContent = nil
+            self.previewImage = nil
+            return
+        }
+        
+        // 4. Audio & Video Media
+        if ["mp4", "mov", "m4v", "m4a", "mp3", "wav", "flac", "aac", "avi", "mkv", "webm"].contains(ext) {
+            self.contentType = .media
+            self.textContent = nil
+            self.previewImage = nil
+            return
+        }
+        
+        // 5. Image Preview
+        if ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "tiff", "heic", "ico", "psd"].contains(ext) {
             if let img = NSImage(contentsOf: url) {
                 self.contentType = .image
                 self.previewImage = img
@@ -134,7 +187,7 @@ public class SharedInspectorState: ObservableObject {
             }
         }
         
-        // HTML Preview
+        // 6. HTML Preview
         if ["html", "htm", "xhtml"].contains(ext) {
             if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
                let str = String(data: data.prefix(1000000), encoding: .utf8) {
@@ -145,7 +198,7 @@ public class SharedInspectorState: ObservableObject {
             }
         }
         
-        // Markdown Preview
+        // 7. Markdown Preview
         if ["md", "markdown", "mdown", "mkdn"].contains(ext) {
             if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
                let str = String(data: data.prefix(500000), encoding: .utf8) {
@@ -156,16 +209,16 @@ public class SharedInspectorState: ObservableObject {
             }
         }
         
-        // Code / Text Preview
+        // 8. Code / Text Preview
         let codeExtensions = [
             "swift", "rs", "py", "c", "cpp", "h", "hpp", "js", "ts", "jsx", "tsx",
             "json", "toml", "yaml", "yml", "sh", "zsh", "bash", "go", "java", "kt",
-            "css", "scss", "sass", "less", "sql", "xml", "plist", "csv", "tsv", "log", "txt"
+            "css", "scss", "sass", "less", "sql", "xml", "plist", "log", "txt", "vcf", "bed", "gtf"
         ]
         
         if codeExtensions.contains(ext) {
             if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
-               let str = String(data: data.prefix(65536), encoding: .utf8) {
+               let str = String(data: data.prefix(100000), encoding: .utf8) {
                 self.contentType = .code
                 self.textContent = str
                 self.previewImage = nil

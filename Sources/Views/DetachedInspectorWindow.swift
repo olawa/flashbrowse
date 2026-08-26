@@ -2,7 +2,56 @@ import SwiftUI
 import AppKit
 import WebKit
 import CoreGraphics
+import PDFKit
+import QuickLookUI
 
+// MARK: - Native QuickLook Preview Renderer
+public struct QuickLookRepresentable: NSViewRepresentable {
+    let url: URL
+    
+    public init(url: URL) {
+        self.url = url
+    }
+    
+    public func makeNSView(context: Context) -> QLPreviewView {
+        let view = QLPreviewView(frame: .zero, style: .normal) ?? QLPreviewView()
+        view.previewItem = url as QLPreviewItem
+        view.autostarts = true
+        return view
+    }
+    
+    public func updateNSView(_ view: QLPreviewView, context: Context) {
+        if (view.previewItem as? URL) != url {
+            view.previewItem = url as QLPreviewItem
+        }
+    }
+}
+
+// MARK: - Native PDFKit Renderer
+public struct PDFKitRepresentable: NSViewRepresentable {
+    let url: URL
+    
+    public init(url: URL) {
+        self.url = url
+    }
+    
+    public func makeNSView(context: Context) -> PDFView {
+        let pdfView = PDFView()
+        pdfView.autoScales = true
+        pdfView.displayMode = .singlePageContinuous
+        pdfView.displayDirection = .vertical
+        pdfView.document = PDFDocument(url: url)
+        return pdfView
+    }
+    
+    public func updateNSView(_ pdfView: PDFView, context: Context) {
+        if pdfView.document?.documentURL != url {
+            pdfView.document = PDFDocument(url: url)
+        }
+    }
+}
+
+// MARK: - Native WebKit Renderer
 public struct WebViewRenderer: NSViewRepresentable {
     let url: URL?
     let htmlContent: String?
@@ -47,6 +96,7 @@ public struct WebViewRenderer: NSViewRepresentable {
     }
 }
 
+// MARK: - Markdown Renderer
 public struct MarkdownRenderer {
     public static func wrapInGitHubStyleHTML(markdown: String, isDark: Bool = true) -> String {
         let escaped = markdown
@@ -154,10 +204,12 @@ public struct MarkdownRenderer {
     }
 }
 
+// MARK: - Main Inspector View
 public struct InspectorView: View {
     @ObservedObject var state = SharedInspectorState.shared
-    @State private var renderMode: Int = 0 // 0 = Rendered, 1 = Raw Source
+    @State private var renderMode: Int = 0 // 0 = Rendered / Visual, 1 = Source / Grid
     @AppStorage("flashbrowse_inspector_dark_theme") private var isDarkTheme: Bool = true
+    @State private var tableFilter: String = ""
     
     public init() {}
     
@@ -191,7 +243,7 @@ public struct InspectorView: View {
                     .foregroundColor(isDarkTheme ? .white : .primary)
                     .lineLimit(1)
                 
-                // Toggle between Rendered & Raw Source for Markdown / HTML
+                // Toggle Rendered vs Source / Grid
                 if state.contentType == .markdown || state.contentType == .html {
                     Picker("", selection: $renderMode) {
                         Text("👁 Rendered").tag(0)
@@ -199,6 +251,14 @@ public struct InspectorView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 170)
+                    .padding(.leading, 8)
+                } else if state.contentType == .spreadsheet && !state.parsedTableRows.isEmpty {
+                    Picker("", selection: $renderMode) {
+                        Text("📊 Grid Table").tag(0)
+                        Text("👁 Native Sheet").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 190)
                     .padding(.leading, 8)
                 }
                 
@@ -283,6 +343,28 @@ public struct InspectorView: View {
     @ViewBuilder
     private func previewContainer(meta: ExtendedFileMetadata) -> some View {
         switch state.contentType {
+        case .pdf:
+            if let url = state.currentURL {
+                PDFKitRepresentable(url: url)
+                    .background(contentBgColor)
+            }
+            
+        case .officeDoc, .media:
+            if let url = state.currentURL {
+                QuickLookRepresentable(url: url)
+                    .background(contentBgColor)
+            }
+            
+        case .spreadsheet:
+            if let url = state.currentURL {
+                if renderMode == 0 && !state.parsedTableRows.isEmpty {
+                    spreadsheetTableView
+                } else {
+                    QuickLookRepresentable(url: url)
+                        .background(contentBgColor)
+                }
+            }
+            
         case .image:
             if let img = state.previewImage {
                 ScrollView([.horizontal, .vertical]) {
@@ -332,19 +414,97 @@ public struct InspectorView: View {
             .background(contentBgColor)
             
         case .generic:
-            VStack(spacing: 12) {
-                Image(systemName: "doc.fill")
-                    .font(.system(size: 54))
-                    .foregroundColor(.secondary.opacity(0.5))
-                Text(meta.name)
-                    .font(.system(size: 14, weight: .medium))
-                Text(meta.kindDescription)
-                    .font(.system(size: 12))
+            if let url = state.currentURL {
+                QuickLookRepresentable(url: url)
+                    .background(contentBgColor)
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "doc.fill")
+                        .font(.system(size: 54))
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text(meta.name)
+                        .font(.system(size: 14, weight: .medium))
+                    Text(meta.kindDescription)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(contentBgColor)
+            }
+        }
+    }
+    
+    // MARK: - Spreadsheet / Data Table View
+    private var spreadsheetTableView: some View {
+        VStack(spacing: 0) {
+            // Table Filter Bar
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .foregroundColor(.secondary)
+                TextField("Filter rows in table...", text: $tableFilter)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11))
+                
+                Spacer()
+                
+                Text("\(filteredRows.count) rows")
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.secondary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(cardBgColor)
+            
+            Divider()
+            
+            ScrollView([.horizontal, .vertical]) {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    ForEach(Array(filteredRows.enumerated()), id: \.offset) { rowIdx, row in
+                        let isHeader = (rowIdx == 0)
+                        
+                        HStack(spacing: 1) {
+                            // Row Number Column
+                            Text("\(rowIdx + 1)")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .frame(width: 35, alignment: .trailing)
+                                .padding(.trailing, 6)
+                                .padding(.vertical, 4)
+                                .background(cardBgColor.opacity(0.8))
+                            
+                            // Cells
+                            ForEach(Array(row.enumerated()), id: \.offset) { colIdx, cell in
+                                Text(cell)
+                                    .font(.system(size: 11, weight: isHeader ? .bold : .regular, design: .monospaced))
+                                    .foregroundColor(isHeader ? (isDarkTheme ? .cyan : Color(red: 0.91, green: 0.33, blue: 0.13)) : (isDarkTheme ? .white : .primary))
+                                    .lineLimit(1)
+                                    .frame(minWidth: 100, maxWidth: 300, alignment: .leading)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(isHeader ? cardBgColor : (rowIdx % 2 == 0 ? contentBgColor : cardBgColor.opacity(0.3)))
+                            }
+                        }
+                    }
+                }
+                .padding(4)
+            }
             .background(contentBgColor)
         }
+    }
+    
+    private var filteredRows: [[String]] {
+        let rows = state.parsedTableRows
+        guard !tableFilter.trimmingCharacters(in: .whitespaces).isEmpty else { return rows }
+        let query = tableFilter.lowercased()
+        
+        // Preserve header (row 0) and filter the rest
+        if let header = rows.first {
+            let matches = rows.dropFirst().filter { row in
+                row.contains(where: { $0.lowercased().contains(query) })
+            }
+            return [header] + matches
+        }
+        return rows
     }
     
     @ViewBuilder
@@ -426,7 +586,7 @@ public struct InspectorView: View {
             Text("Hover or select any file in Flashbrowse")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.secondary)
-            Text("Live Markdown, HTML, images, and code preview will render here.")
+            Text("PDFs, Excel spreadsheets, Word docs, Markdown, images, and code will render here instantly.")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary.opacity(0.8))
         }
@@ -450,6 +610,7 @@ public struct InspectorView: View {
     }
 }
 
+// MARK: - Multi-Monitor Window Controller
 @MainActor
 public class InspectorWindowController: NSObject {
     public static let shared = InspectorWindowController()
@@ -467,7 +628,7 @@ public class InspectorWindowController: NSObject {
     public func showWindow() {
         if window == nil {
             let win = NSWindow(
-                contentRect: NSRect(x: 100, y: 100, width: 750, height: 550),
+                contentRect: NSRect(x: 100, y: 100, width: 850, height: 600),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
@@ -482,7 +643,6 @@ public class InspectorWindowController: NSObject {
         SharedInspectorState.shared.isInspectorWindowOpen = true
     }
     
-    // MARK: - Mouse Warp / Teleportation between screens
     public func warpMouseToInspector() {
         showWindow()
         guard let win = window else { return }
