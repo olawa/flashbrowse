@@ -4,6 +4,16 @@ A blazing fast, keyboard-driven native macOS file browser and command center bui
 
 ---
 
+## 📥 Download Prebuilt Release
+
+Download the ready-to-run macOS app from the [Releases page](https://github.com/olawa/flashbrowse/releases):
+
+1. Download **`Flashbrowse-macos-universal.zip`** (or `Flashbrowse-macos-arm64.zip`).
+2. Unzip and drag **`Flashbrowse.app`** to your `/Applications` folder.
+3. Open **Flashbrowse**!
+
+---
+
 ## ✨ Features
 
 - **⚡ Blazing Fast Native Architecture**: Zero Electron, ~2.2 MB binary size, deterministic natural alphanumeric sorting with folders always on top.
@@ -29,18 +39,14 @@ A blazing fast, keyboard-driven native macOS file browser and command center bui
 
 ---
 
-## 🚀 Building & Running
+## 🛠️ Building from Source
 
-### Build Native App Bundle:
+Requirements: macOS 14+, Xcode 15+ or Command Line Tools (Swift 6).
 
 ```bash
-cd /Users/olwal516/dev/projects/flashbrowse
+git clone https://github.com/olawa/flashbrowse.git
+cd flashbrowse
 ./build_app.sh
-```
-
-### Launch:
-
-```bash
 open Flashbrowse.app
 ```
 

@@ -7,3 +7,4 @@ FlashbrowseTests
 .swiftpm/
 xcuserdata/
 DerivedData/
+*.zip
