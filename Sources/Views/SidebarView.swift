@@ -322,11 +322,10 @@ public struct SidebarView: View {
     
     @ViewBuilder
     private func sidebarRow(name: String, icon: String, url: URL) -> some View {
-        let isSelected = indexService.activeIndex == nil && !sshService.isRemoteBrowserOpen && state.currentDirectory.path == url.path
+        let isSelected = indexService.activeIndex == nil && state.currentDirectory.path == url.path
         
         Button(action: {
             indexService.clearIndex()
-            sshService.disconnect()
             state.navigateTo(url: url)
         }) {
             HStack(spacing: 8) {
@@ -353,11 +352,10 @@ public struct SidebarView: View {
     
     @ViewBuilder
     private func favoriteRow(for bookmark: BookmarkItem) -> some View {
-        let isSelected = indexService.activeIndex == nil && !sshService.isRemoteBrowserOpen && state.currentDirectory.path == bookmark.url.path
+        let isSelected = indexService.activeIndex == nil && state.currentDirectory.path == bookmark.url.path
         
         Button(action: {
             indexService.clearIndex()
-            sshService.disconnect()
             state.navigateTo(url: bookmark.url)
         }) {
             HStack(spacing: 8) {
