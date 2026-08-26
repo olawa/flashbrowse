@@ -15,9 +15,23 @@ public struct RemoteBrowserView: View {
     @State private var isEditingRemotePath: Bool = false
     @State private var remotePathInputText: String = ""
     @FocusState private var isRemotePathFocused: Bool
+    @State private var lastRemoteNavTime: Date = Date.distantPast
     
     public init(localState: NavigationState) {
         self.localState = localState
+    }
+    
+    private func handleRemoteTap(item: RemoteFileItem) {
+        let now = Date()
+        // Prevent accidental double-clicks from opening sub-items
+        guard now.timeIntervalSince(lastRemoteNavTime) > 0.35 else { return }
+        
+        if item.isDirectory {
+            lastRemoteNavTime = now
+            sshService.navigateToRemote(path: item.remotePath)
+        } else {
+            downloadItemToLocal(item)
+        }
     }
     
     public var body: some View {
@@ -387,11 +401,7 @@ public struct RemoteBrowserView: View {
                             }
                         }
                         .onTapGesture {
-                            if item.isDirectory {
-                                sshService.navigateToRemote(path: item.remotePath)
-                            } else {
-                                downloadItemToLocal(item)
-                            }
+                            handleRemoteTap(item: item)
                         }
                         .contextMenu {
                             if item.isDirectory {

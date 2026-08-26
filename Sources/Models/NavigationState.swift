@@ -325,8 +325,15 @@ public class NavigationState: ObservableObject {
         }
     }
     
+    public var lastNavigationTime: Date = Date.distantPast
+    
     public func openItem(_ item: FileItem) {
+        let now = Date()
+        // Prevent accidental double-clicks from propagating down into child directories
+        guard now.timeIntervalSince(lastNavigationTime) > 0.35 else { return }
+        
         if item.isDirectory {
+            lastNavigationTime = now
             navigateTo(url: item.url)
         } else {
             FileSystemService.shared.openItem(url: item.url)
@@ -336,6 +343,7 @@ public class NavigationState: ObservableObject {
     public func navigateTo(url: URL, addToHistory: Bool = true) {
         let target = url.standardized
         guard target != currentDirectory else { return }
+        lastNavigationTime = Date()
         
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: target.path, isDirectory: &isDir), isDir.boolValue {

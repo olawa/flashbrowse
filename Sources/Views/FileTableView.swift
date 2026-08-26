@@ -248,7 +248,7 @@ public struct FileTableView: View {
                 hoveredURL = nil
             }
         }
-        // Single Click = Open
+        // Single Click vs Double Click
         .onTapGesture {
             if state.singleClickToOpen {
                 state.openItem(item)
@@ -258,7 +258,9 @@ public struct FileTableView: View {
         }
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
-                state.openItem(item)
+                if !state.singleClickToOpen {
+                    state.openItem(item)
+                }
             }
         )
         .contextMenu {
@@ -350,7 +352,7 @@ public struct FileTableView: View {
                 hoveredURL = nil
             }
         }
-        // Single Click = Open
+        // Single Click vs Double Click
         .onTapGesture {
             if state.singleClickToOpen {
                 state.openItem(item)
@@ -360,7 +362,9 @@ public struct FileTableView: View {
         }
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
-                state.openItem(item)
+                if !state.singleClickToOpen {
+                    state.openItem(item)
+                }
             }
         )
         .contextMenu {
