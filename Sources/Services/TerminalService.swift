@@ -24,27 +24,44 @@ public class TerminalService: ObservableObject {
     @Published public var isRunningCommand: Bool = false
     @Published public var autoSyncWithBrowser: Bool = true
     
+    // Dual Terminal Split Support (Left Terminal | Right Terminal)
+    @Published public var isDualTerminalSplit: Bool = false
+    @Published public var rightWorkingDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    @Published public var rightOutputLines: [TerminalOutputLine] = []
+    @Published public var isRightRunningCommand: Bool = false
+    
     // SSH Remote Terminal State
     @Published public var isSSHTerminalMode: Bool = false
     @Published public var sshHost: SSHHost?
     @Published public var remoteWorkingDir: String = "~"
     
+    // Focus Trigger
+    @Published public var focusInputTrigger: UUID = UUID()
+    
     public var commandHistory: [String] = []
     public var historyIndex: Int = -1
+    public var rightCommandHistory: [String] = []
+    public var rightHistoryIndex: Int = -1
+    
     private var activeProcess: Process?
+    private var activeRightProcess: Process?
     private var previousLocalDir: URL?
     private var previousRemoteDir: String?
     
     // Callbacks for 2-Way Sync (Terminal -> Browser)
     public var onLocalDirectoryChange: ((URL) -> Void)?
+    public var onRightLocalDirectoryChange: ((URL) -> Void)?
     public var onRemoteDirectoryChange: ((String) -> Void)?
     
     private init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
         self.workingDirectory = home
+        self.rightWorkingDirectory = home
         appendLine("⚡ Flashbrowse Integrated Terminal (2-Way Synced)", isPrompt: true)
         appendLine("Commands like 'cd <path>' will move both terminal and browser in real time.", isPrompt: true)
         appendLine("----------------------------------------------------------------", isPrompt: true)
+        
+        appendRightLine("🌐 Remote / Secondary Terminal", isPrompt: true)
     }
     
     public func appendLine(_ text: String, isError: Bool = false, isPrompt: Bool = false) {
@@ -54,8 +71,27 @@ public class TerminalService: ObservableObject {
         }
     }
     
+    public func appendRightLine(_ text: String, isError: Bool = false, isPrompt: Bool = false) {
+        rightOutputLines.append(TerminalOutputLine(text: text, isError: isError, isPrompt: isPrompt))
+        if rightOutputLines.count > 1500 {
+            rightOutputLines.removeFirst(rightOutputLines.count - 1500)
+        }
+    }
+    
+    public func focusTerminal() {
+        if !isOpen {
+            isOpen = true
+        }
+        focusInputTrigger = UUID()
+    }
+    
     public func toggleTerminal() {
-        isOpen.toggle()
+        if !isOpen {
+            isOpen = true
+            focusInputTrigger = UUID()
+        } else {
+            isOpen = false
+        }
     }
     
     // MARK: - Browser -> Terminal Sync
@@ -68,11 +104,24 @@ public class TerminalService: ObservableObject {
         }
     }
     
+    public func syncRightWorkingDirectory(_ url: URL) {
+        guard autoSyncWithBrowser else { return }
+        let target = url.standardized
+        if target != rightWorkingDirectory {
+            rightWorkingDirectory = target
+            appendRightLine("📂 cd \(target.path)", isPrompt: true)
+        }
+    }
+    
     public func syncRemoteDirectory(_ path: String) {
         guard autoSyncWithBrowser, isSSHTerminalMode else { return }
         if path != remoteWorkingDir {
             remoteWorkingDir = path
-            appendLine("🌐 cd \(path)", isPrompt: true)
+            if isDualTerminalSplit {
+                appendRightLine("🌐 cd \(path)", isPrompt: true)
+            } else {
+                appendLine("🌐 cd \(path)", isPrompt: true)
+            }
         }
     }
     
@@ -85,6 +134,7 @@ public class TerminalService: ObservableObject {
         
         appendLine("\n🌐 Connected SSH Terminal to \(host.alias) (\(host.connectionString))", isPrompt: true)
         appendLine("Remote path: \(remotePath)", isPrompt: true)
+        focusInputTrigger = UUID()
     }
     
     public func switchToLocalSession() {
@@ -102,6 +152,11 @@ public class TerminalService: ObservableObject {
         }
     }
     
+    public func clearRight() {
+        rightOutputLines.removeAll()
+        appendRightLine("⚡ Flashbrowse Terminal [Right] - \(rightWorkingDirectory.path)", isPrompt: true)
+    }
+    
     public func cancelRunningCommand() {
         if let proc = activeProcess, proc.isRunning {
             proc.terminate()
@@ -111,7 +166,16 @@ public class TerminalService: ObservableObject {
         }
     }
     
-    // MARK: - Command Execution with 2-Way Sync
+    public func cancelRightRunningCommand() {
+        if let proc = activeRightProcess, proc.isRunning {
+            proc.terminate()
+            appendRightLine("^C (Command cancelled)", isError: true)
+            isRightRunningCommand = false
+            activeRightProcess = nil
+        }
+    }
+    
+    // MARK: - Command Execution (Left / Primary)
     public func executeCommand(_ rawCommand: String) {
         let trimmed = rawCommand.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -119,14 +183,28 @@ public class TerminalService: ObservableObject {
         commandHistory.append(trimmed)
         historyIndex = commandHistory.count
         
-        if isSSHTerminalMode {
+        if isSSHTerminalMode && !isDualTerminalSplit {
             executeRemoteCommand(trimmed)
         } else {
             executeLocalCommand(trimmed)
         }
     }
     
-    // MARK: - Local Command Execution
+    // MARK: - Command Execution (Right / Secondary in Dual-Split)
+    public func executeRightCommand(_ rawCommand: String) {
+        let trimmed = rawCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        
+        rightCommandHistory.append(trimmed)
+        rightHistoryIndex = rightCommandHistory.count
+        
+        if isSSHTerminalMode {
+            executeRemoteRightCommand(trimmed)
+        } else {
+            executeLocalRightCommand(trimmed)
+        }
+    }
+    
     private func executeLocalCommand(_ trimmed: String) {
         let promptPath = workingDirectory.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")
         appendLine("➜ \(promptPath) $ \(trimmed)", isPrompt: true)
@@ -141,7 +219,6 @@ public class TerminalService: ObservableObject {
             return
         }
         
-        // 2-Way CD: Move Terminal AND Move Browser!
         if trimmed == "cd" {
             let home = FileManager.default.homeDirectoryForCurrentUser
             previousLocalDir = workingDirectory
@@ -166,18 +243,53 @@ public class TerminalService: ObservableObject {
             return
         }
         
-        // Execute shell subprocess
         runSubprocess(
             executableURL: URL(fileURLWithPath: "/bin/zsh"),
             arguments: ["-c", "cd '\(workingDirectory.path)' && \(trimmed)"],
-            environment: ProcessInfo.processInfo.environment
+            environment: ProcessInfo.processInfo.environment,
+            isRight: false
+        )
+    }
+    
+    private func executeLocalRightCommand(_ trimmed: String) {
+        let promptPath = rightWorkingDirectory.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")
+        appendRightLine("➜ \(promptPath) $ \(trimmed)", isPrompt: true)
+        
+        if trimmed == "clear" {
+            clearRight()
+            return
+        }
+        
+        if trimmed == "pwd" {
+            appendRightLine(rightWorkingDirectory.path)
+            return
+        }
+        
+        if trimmed.hasPrefix("cd ") {
+            let pathArg = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+            let expanded = NSString(string: pathArg).expandingTildeInPath
+            let targetURL = expanded.hasPrefix("/") ? URL(fileURLWithPath: expanded).standardized : rightWorkingDirectory.appendingPathComponent(expanded).standardized
+            
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: targetURL.path, isDirectory: &isDir), isDir.boolValue {
+                rightWorkingDirectory = targetURL
+                onRightLocalDirectoryChange?(targetURL)
+            } else {
+                appendRightLine("cd: no such file or directory: \(pathArg)", isError: true)
+            }
+            return
+        }
+        
+        runSubprocess(
+            executableURL: URL(fileURLWithPath: "/bin/zsh"),
+            arguments: ["-c", "cd '\(rightWorkingDirectory.path)' && \(trimmed)"],
+            environment: ProcessInfo.processInfo.environment,
+            isRight: true
         )
     }
     
     private func handleLocalCD(path: String) {
         var cleanPath = path
-        
-        // Auto-translate Linux paths like /home/username or /home/users/username to macOS /Users/username
         let user = NSUserName()
         let homePath = FileManager.default.homeDirectoryForCurrentUser.path
         if cleanPath.hasPrefix("/home/\(user)") {
@@ -198,14 +310,12 @@ public class TerminalService: ObservableObject {
         if FileManager.default.fileExists(atPath: targetURL.path, isDirectory: &isDir), isDir.boolValue {
             previousLocalDir = workingDirectory
             workingDirectory = targetURL
-            // 2-Way Sync: Update Browser!
             onLocalDirectoryChange?(targetURL)
         } else {
             appendLine("cd: no such file or directory: \(path)", isError: true)
         }
     }
     
-    // MARK: - Remote SSH Command Execution
     private func executeRemoteCommand(_ trimmed: String) {
         guard let host = sshHost else {
             switchToLocalSession()
@@ -224,7 +334,6 @@ public class TerminalService: ObservableObject {
             return
         }
         
-        // 2-Way Remote CD: Move Terminal AND Move Remote Browser!
         if trimmed == "cd" || trimmed == "cd ~" {
             previousRemoteDir = remoteWorkingDir
             remoteWorkingDir = "~"
@@ -238,7 +347,6 @@ public class TerminalService: ObservableObject {
             return
         }
         
-        // Run remote command over SSH
         let target = host.user.isEmpty ? host.hostName : "\(host.user)@\(host.hostName)"
         var sshArgs = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8"]
         if host.port != 22 { sshArgs.append(contentsOf: ["-p", "\(host.port)"]) }
@@ -249,7 +357,46 @@ public class TerminalService: ObservableObject {
         runSubprocess(
             executableURL: URL(fileURLWithPath: "/usr/bin/ssh"),
             arguments: sshArgs,
-            environment: ProcessInfo.processInfo.environment
+            environment: ProcessInfo.processInfo.environment,
+            isRight: false
+        )
+    }
+    
+    private func executeRemoteRightCommand(_ trimmed: String) {
+        guard let host = sshHost else { return }
+        
+        appendRightLine("➜ \(host.alias):\(remoteWorkingDir) $ \(trimmed)", isPrompt: true)
+        
+        if trimmed == "clear" {
+            clearRight()
+            return
+        }
+        
+        if trimmed == "cd" || trimmed == "cd ~" {
+            previousRemoteDir = remoteWorkingDir
+            remoteWorkingDir = "~"
+            onRemoteDirectoryChange?("~")
+            return
+        }
+        
+        if trimmed.hasPrefix("cd ") {
+            let pathArg = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+            handleRemoteCD(path: pathArg)
+            return
+        }
+        
+        let target = host.user.isEmpty ? host.hostName : "\(host.user)@\(host.hostName)"
+        var sshArgs = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8"]
+        if host.port != 22 { sshArgs.append(contentsOf: ["-p", "\(host.port)"]) }
+        if let key = host.identityFile, !key.isEmpty { sshArgs.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath]) }
+        sshArgs.append(target)
+        sshArgs.append("cd \(remoteWorkingDir) && \(trimmed)")
+        
+        runSubprocess(
+            executableURL: URL(fileURLWithPath: "/usr/bin/ssh"),
+            arguments: sshArgs,
+            environment: ProcessInfo.processInfo.environment,
+            isRight: true
         )
     }
     
@@ -266,13 +413,16 @@ public class TerminalService: ObservableObject {
         
         previousRemoteDir = remoteWorkingDir
         remoteWorkingDir = newPath
-        // 2-Way Sync: Update Remote Browser!
         onRemoteDirectoryChange?(newPath)
     }
     
-    // MARK: - Subprocess Execution without pipe race conditions
-    private func runSubprocess(executableURL: URL, arguments: [String], environment: [String: String]) {
-        isRunningCommand = true
+    // MARK: - Subprocess Execution
+    private func runSubprocess(executableURL: URL, arguments: [String], environment: [String: String], isRight: Bool) {
+        if isRight {
+            isRightRunningCommand = true
+        } else {
+            isRunningCommand = true
+        }
         
         Task.detached(priority: .userInitiated) {
             let process = Process()
@@ -288,13 +438,16 @@ public class TerminalService: ObservableObject {
             process.standardError = errPipe
             
             await MainActor.run {
-                self.activeProcess = process
+                if isRight {
+                    self.activeRightProcess = process
+                } else {
+                    self.activeProcess = process
+                }
             }
             
             do {
                 try process.run()
                 
-                // Read stdout and stderr completely
                 let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
                 let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
@@ -303,28 +456,45 @@ public class TerminalService: ObservableObject {
                 let errStr = String(data: errData, encoding: .utf8) ?? ""
                 
                 await MainActor.run {
-                    if !outStr.isEmpty {
-                        for line in outStr.components(separatedBy: "\n") {
-                            if !line.isEmpty {
+                    if isRight {
+                        if !outStr.isEmpty {
+                            for line in outStr.components(separatedBy: "\n") where !line.isEmpty {
+                                self.appendRightLine(line)
+                            }
+                        }
+                        if !errStr.isEmpty {
+                            for line in errStr.components(separatedBy: "\n") where !line.isEmpty {
+                                self.appendRightLine(line, isError: true)
+                            }
+                        }
+                        self.isRightRunningCommand = false
+                        self.activeRightProcess = nil
+                    } else {
+                        if !outStr.isEmpty {
+                            for line in outStr.components(separatedBy: "\n") where !line.isEmpty {
                                 self.appendLine(line)
                             }
                         }
-                    }
-                    if !errStr.isEmpty {
-                        for line in errStr.components(separatedBy: "\n") {
-                            if !line.isEmpty {
+                        if !errStr.isEmpty {
+                            for line in errStr.components(separatedBy: "\n") where !line.isEmpty {
                                 self.appendLine(line, isError: true)
                             }
                         }
+                        self.isRunningCommand = false
+                        self.activeProcess = nil
                     }
-                    self.isRunningCommand = false
-                    self.activeProcess = nil
                 }
             } catch {
                 await MainActor.run {
-                    self.appendLine("Execution error: \(error.localizedDescription)", isError: true)
-                    self.isRunningCommand = false
-                    self.activeProcess = nil
+                    if isRight {
+                        self.appendRightLine("Execution error: \(error.localizedDescription)", isError: true)
+                        self.isRightRunningCommand = false
+                        self.activeRightProcess = nil
+                    } else {
+                        self.appendLine("Execution error: \(error.localizedDescription)", isError: true)
+                        self.isRunningCommand = false
+                        self.activeProcess = nil
+                    }
                 }
             }
         }

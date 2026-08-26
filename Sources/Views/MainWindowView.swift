@@ -140,7 +140,7 @@ public struct MainWindowView: View {
                     }
                     .foregroundColor(terminalService.isOpen ? Color(red: 0.91, green: 0.33, blue: 0.13) : .primary)
                 }
-                .help("Toggle Integrated Terminal (Cmd+J)")
+                .help("Toggle & Focus Integrated Terminal (Cmd+J)")
                 
                 // Dual Pane Toggle (only in normal view)
                 if indexService.activeIndex == nil && !sshService.isRemoteBrowserOpen {
