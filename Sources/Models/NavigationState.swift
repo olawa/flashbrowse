@@ -160,6 +160,11 @@ public class NavigationState: ObservableObject {
         reload()
         startDirectoryWatcher()
         updateGitStatus()
+        
+        // 2-Way Sync: When terminal runs 'cd <dir>', navigate the file browser!
+        TerminalService.shared.onLocalDirectoryChange = { [weak self] newURL in
+            self?.navigateTo(url: newURL)
+        }
     }
     
     // MARK: - Toast Message Helper

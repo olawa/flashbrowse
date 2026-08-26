@@ -2,12 +2,16 @@ import SwiftUI
 
 public struct TerminalPanelView: View {
     @ObservedObject var terminalService = TerminalService.shared
+    @ObservedObject var sshService = SSHService.shared
     @State private var inputCommand: String = ""
     @FocusState private var isInputFocused: Bool
     
     public init() {}
     
     private var promptText: String {
+        if terminalService.isSSHTerminalMode, let host = terminalService.sshHost {
+            return "➜ \(host.alias):\(terminalService.remoteWorkingDir) $"
+        }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let path = terminalService.workingDirectory.path.replacingOccurrences(of: home, with: "~")
         return "➜ \(path) $"
@@ -17,39 +21,75 @@ public struct TerminalPanelView: View {
         VStack(spacing: 0) {
             // Header Mini Toolbar
             HStack(spacing: 8) {
-                HStack(spacing: 5) {
-                    Image(systemName: "terminal.fill")
-                        .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
-                        .font(.system(size: 11))
-                    
-                    Text("TERMINAL (zsh)")
-                        .font(.system(size: 11, weight: .bold))
+                // Session Type Badge / Switcher
+                if let host = sshService.activeHost {
+                    HStack(spacing: 2) {
+                        Button(action: {
+                            terminalService.switchToLocalSession()
+                        }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "laptopcomputer")
+                                Text("Local")
+                            }
+                            .font(.system(size: 10, weight: .bold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(!terminalService.isSSHTerminalMode ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+                            .foregroundColor(!terminalService.isSSHTerminalMode ? .white : .secondary)
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Button(action: {
+                            terminalService.startSSHSession(host: host, remotePath: sshService.currentRemotePath)
+                        }) {
+                            HStack(spacing: 3) {
+                                Image(systemName: "server.rack")
+                                Text("SSH: \(host.alias)")
+                            }
+                            .font(.system(size: 10, weight: .bold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(terminalService.isSSHTerminalMode ? Color.green : Color.clear)
+                            .foregroundColor(terminalService.isSSHTerminalMode ? .black : .secondary)
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(2)
+                    .background(Color.black.opacity(0.3))
+                    .cornerRadius(5)
+                } else {
+                    HStack(spacing: 5) {
+                        Image(systemName: "terminal.fill")
+                            .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                            .font(.system(size: 11))
+                        
+                        Text("TERMINAL (zsh)")
+                            .font(.system(size: 11, weight: .bold))
+                    }
                 }
                 
-                Text("• \(terminalService.workingDirectory.path)")
+                Text(terminalService.isSSHTerminalMode ? "• \(terminalService.remoteWorkingDir)" : "• \(terminalService.workingDirectory.path)")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 
                 Spacer()
                 
-                // Auto-CD Toggle
-                Button(action: {
-                    terminalService.autoSyncWithBrowser.toggle()
-                }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                        Text("Auto-CD")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(terminalService.autoSyncWithBrowser ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.2) : Color.clear)
-                    .foregroundColor(terminalService.autoSyncWithBrowser ? Color(red: 0.91, green: 0.33, blue: 0.13) : .secondary)
-                    .cornerRadius(4)
+                // 2-Way Sync Indicator
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 9))
+                    Text("2-Way Sync")
+                        .font(.system(size: 9, weight: .bold))
                 }
-                .buttonStyle(.plain)
-                .help("Automatically cd to active folder when navigating in Flashbrowse")
+                .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.15))
+                .cornerRadius(4)
+                .help("cd in terminal navigates the browser, and clicking folders in browser navigates the terminal")
                 
                 if terminalService.isRunningCommand {
                     Button(action: {
@@ -130,7 +170,7 @@ public struct TerminalPanelView: View {
             HStack(spacing: 6) {
                 Text(promptText)
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                    .foregroundColor(terminalService.isSSHTerminalMode ? Color.green : Color(red: 0.91, green: 0.33, blue: 0.13))
                 
                 TextField("", text: $inputCommand)
                     .textFieldStyle(.plain)

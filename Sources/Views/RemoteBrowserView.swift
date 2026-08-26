@@ -11,6 +11,11 @@ public struct RemoteBrowserView: View {
     @State private var isRemoteDropTargeted: Bool = false
     @State private var isLocalDropTargeted: Bool = false
     
+    // Direct Remote Path Input
+    @State private var isEditingRemotePath: Bool = false
+    @State private var remotePathInputText: String = ""
+    @FocusState private var isRemotePathFocused: Bool
+    
     public init(localState: NavigationState) {
         self.localState = localState
     }
@@ -92,7 +97,7 @@ public struct RemoteBrowserView: View {
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "terminal.fill")
-                        Text("Remote Shell")
+                        Text("SSH Terminal")
                             .font(.system(size: 11, weight: .medium))
                     }
                     .padding(.horizontal, 8)
@@ -101,7 +106,7 @@ public struct RemoteBrowserView: View {
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
-                .help("Open SSH shell in terminal (Cmd+J)")
+                .help("Open interactive SSH shell in terminal (Cmd+J)")
                 
                 // Disconnect Button
                 Button(action: {
@@ -165,14 +170,55 @@ public struct RemoteBrowserView: View {
                 
                 // RIGHT PANE: REMOTE SSH SERVER
                 VStack(spacing: 0) {
+                    // Remote Path Bar with Direct Input / Cmd+G Support
                     HStack(spacing: 6) {
                         Image(systemName: "server.rack")
                             .foregroundColor(Color.green)
                             .font(.system(size: 12))
                         
-                        Text("REMOTE: \(sshService.currentRemotePath)")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .lineLimit(1)
+                        if isEditingRemotePath {
+                            HStack(spacing: 4) {
+                                TextField("Enter remote path e.g. /data/projects", text: $remotePathInputText)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .focused($isRemotePathFocused)
+                                    .onSubmit {
+                                        commitRemotePath()
+                                    }
+                                    .onExitCommand {
+                                        isEditingRemotePath = false
+                                    }
+                                
+                                Button(action: { commitRemotePath() }) {
+                                    Image(systemName: "arrow.right.circle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Color.green)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(nsColor: .textBackgroundColor))
+                            .cornerRadius(4)
+                        } else {
+                            Button(action: {
+                                remotePathInputText = sshService.currentRemotePath
+                                isEditingRemotePath = true
+                                isRemotePathFocused = true
+                            }) {
+                                HStack(spacing: 4) {
+                                    Text("REMOTE: \(sshService.currentRemotePath)")
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        .lineLimit(1)
+                                    
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(.secondary.opacity(0.6))
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .help("Click or press Cmd+G to jump to remote path")
+                        }
                         
                         Spacer()
                         
@@ -231,6 +277,29 @@ public struct RemoteBrowserView: View {
                 }
             }
         }
+        .onAppear {
+            // Setup 2-Way Remote Terminal Callback
+            TerminalService.shared.onRemoteDirectoryChange = { [weak sshService] newRemotePath in
+                sshService?.navigateToRemote(path: newRemotePath, addToHistory: true)
+            }
+        }
+        .onKeyPress { press in
+            if press.modifiers.contains(.command) && (press.characters == "g" || press.characters == "G") {
+                remotePathInputText = sshService.currentRemotePath
+                isEditingRemotePath = true
+                isRemotePathFocused = true
+                return .handled
+            }
+            return .ignored
+        }
+    }
+    
+    private func commitRemotePath() {
+        let clean = remotePathInputText.trimmingCharacters(in: .whitespaces)
+        if !clean.isEmpty {
+            sshService.navigateToRemote(path: clean)
+        }
+        isEditingRemotePath = false
     }
     
     // MARK: - Remote Files Table
@@ -305,10 +374,8 @@ public struct RemoteBrowserView: View {
                                       : (isHovered ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.12) : Color.clear))
                         )
                         .contentShape(Rectangle())
-                        // Drag provider for remote file to drop on local pane
                         .onDrag {
-                            let itemProvider = NSItemProvider(object: item.remotePath as NSString)
-                            return itemProvider
+                            NSItemProvider(object: item.remotePath as NSString)
                         }
                         .onHover { hovering in
                             if hovering {
@@ -464,14 +531,6 @@ public struct RemoteBrowserView: View {
     private func openRemoteTerminal(at customPath: String? = nil) {
         guard let host = sshService.activeHost else { return }
         let path = customPath ?? sshService.currentRemotePath
-        
-        TerminalService.shared.isOpen = true
-        let sshTarget = host.user.isEmpty ? host.hostName : "\(host.user)@\(host.hostName)"
-        var cmd = "ssh"
-        if host.port != 22 { cmd += " -p \(host.port)" }
-        if let key = host.identityFile, !key.isEmpty { cmd += " -i \(key)" }
-        cmd += " -t \(sshTarget) 'cd \(path) && exec $SHELL -l'"
-        
-        TerminalService.shared.executeCommand(cmd)
+        TerminalService.shared.startSSHSession(host: host, remotePath: path)
     }
 }
