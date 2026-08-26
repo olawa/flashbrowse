@@ -77,19 +77,28 @@ public struct TerminalPanelView: View {
                 
                 Spacer()
                 
-                // 2-Way Sync Indicator
-                HStack(spacing: 3) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 9))
-                    Text("2-Way Sync")
-                        .font(.system(size: 9, weight: .bold))
+                // Interactive 2-Way Sync Toggle Button
+                Button(action: {
+                    terminalService.autoSyncWithBrowser.toggle()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 9, weight: .bold))
+                        Text(terminalService.autoSyncWithBrowser ? "2-Way Sync: ON" : "2-Way Sync: OFF")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .foregroundColor(terminalService.autoSyncWithBrowser ? Color(red: 0.91, green: 0.33, blue: 0.13) : .secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        terminalService.autoSyncWithBrowser
+                        ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.2)
+                        : Color.white.opacity(0.08)
+                    )
+                    .cornerRadius(4)
                 }
-                .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.15))
-                .cornerRadius(4)
-                .help("cd in terminal navigates the browser, and clicking folders in browser navigates the terminal")
+                .buttonStyle(.plain)
+                .help("Click to toggle automatic 2-way sync: 'cd <dir>' in terminal moves the browser, and browsing folders moves the terminal")
                 
                 if terminalService.isRunningCommand {
                     Button(action: {

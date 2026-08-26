@@ -202,6 +202,22 @@ public struct MainWindowView: View {
         .onCommand(#selector(NSResponder.selectAll(_:))) {
             currentActiveState.selectedURLs = Set(currentActiveState.filteredItems.map { $0.url })
         }
+        .onAppear {
+            updateTerminalCallback()
+        }
+        .onChange(of: activePane) {
+            updateTerminalCallback()
+        }
+    }
+    
+    private func updateTerminalCallback() {
+        TerminalService.shared.onLocalDirectoryChange = { [weak leftState, weak rightState] targetURL in
+            if activePane == .left {
+                leftState?.navigateTo(url: targetURL)
+            } else {
+                rightState?.navigateTo(url: targetURL)
+            }
+        }
     }
     
     // MARK: - Workspace Presets Coordinator
