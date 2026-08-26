@@ -115,19 +115,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private var scrollMonitor: Any?
     private var keyMonitor: Any?
-    private var globalMouseMonitor: Any?
-    private var hoverCheckTimer: Timer?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         Self.lastWindowActivationTime = Date()
         
-        setupHoverActivation()
-        
         // Listen to window focus events to record activation time
-        NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { _ in
+        NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { notif in
             Self.lastWindowActivationTime = Date()
+            if let win = notif.object as? NSWindow, UserDefaults.standard.bool(forKey: "flashbrowse_always_on_top") {
+                win.level = .floating
+            }
         }
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
             Self.lastWindowActivationTime = Date()
@@ -193,36 +192,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return nil
             }
             return event
-        }
-    }
-    
-    // MARK: - Focus Follows Mouse (Hover to Activate Window)
-    private func setupHoverActivation() {
-        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved]) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.checkMouseHoverActivation()
-            }
-        }
-        
-        hoverCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.checkMouseHoverActivation()
-            }
-        }
-    }
-    
-    @MainActor
-    private func checkMouseHoverActivation() {
-        guard UserDefaults.standard.bool(forKey: "flashbrowse_hover_activate") else { return }
-        guard !NSApp.isActive else { return }
-        
-        let mouseLoc = NSEvent.mouseLocation
-        if let mainWin = NSApp.windows.first(where: { $0.isVisible && $0 != InspectorWindowController.shared.window && !($0 is NSPanel) }) {
-            if mainWin.frame.contains(mouseLoc) {
-                NSApp.activate(ignoringOtherApps: true)
-                mainWin.makeKey()
-                Self.lastWindowActivationTime = Date()
-            }
         }
     }
     

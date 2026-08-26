@@ -247,8 +247,28 @@ public struct BreadcrumbBarView: View {
             .buttonStyle(.plain)
             .help("Open Inspector Window (Cmd+Option+I) for external monitor")
             
+            // 📌 Pin Window (Always on Top) Toolbar Button
+            Button(action: {
+                state.togglePinWindow()
+            }) {
+                Image(systemName: state.isPinnedAlwaysOnTop ? "pin.fill" : "pin")
+                    .font(.system(size: 12))
+                    .foregroundColor(state.isPinnedAlwaysOnTop ? Color.white : Color.primary)
+                    .frame(width: 26, height: 26)
+                    .background(state.isPinnedAlwaysOnTop ? Color.flashbrowseAccent : Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(6)
+            }
+            .buttonStyle(.plain)
+            .help(state.isPinnedAlwaysOnTop ? "Unpin Window (Always on Top is ON)" : "Pin Window (Keep Always on Top)")
+            
             // View Options Menu
             Menu {
+                Section("Window & View") {
+                    Toggle("Always on Top (Pin Window)", isOn: $state.isPinnedAlwaysOnTop)
+                }
+                
+                Divider()
+                
                 Section("Search Scope") {
                     Picker("Scope", selection: $state.searchScope) {
                         ForEach(SearchScope.allCases) { s in
@@ -266,7 +286,6 @@ public struct BreadcrumbBarView: View {
                         Text("🖱️ Double Click All").tag(ClickOpenMode.doubleClick)
                     }
                     
-                    Toggle("Focus on Mouse Hover", isOn: $state.autoActivateOnHover)
                     Toggle("Hover to Select", isOn: $state.hoverToSelect)
                 }
                 

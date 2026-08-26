@@ -130,14 +130,56 @@ public class NavigationState: ObservableObject {
         set { clickMode = newValue ? .foldersOnly : .doubleClick }
     }
     
-    @Published public var autoActivateOnHover: Bool = UserDefaults.standard.bool(forKey: "flashbrowse_hover_activate") {
+    // Window Pinning (Always on Top)
+    @Published public var isPinnedAlwaysOnTop: Bool = UserDefaults.standard.bool(forKey: "flashbrowse_always_on_top") {
         didSet {
-            UserDefaults.standard.set(autoActivateOnHover, forKey: "flashbrowse_hover_activate")
-            NotificationCenter.default.post(name: .flashbrowseHoverActivateChanged, object: autoActivateOnHover)
+            UserDefaults.standard.set(isPinnedAlwaysOnTop, forKey: "flashbrowse_always_on_top")
+            applyWindowPinning()
         }
     }
     
-    @Published public var hoverToSelect: Bool = true
+    public func applyWindowPinning() {
+        for window in NSApp.windows where !(window is NSPanel) && window.isVisible {
+            window.level = isPinnedAlwaysOnTop ? .floating : .normal
+        }
+    }
+    
+    public func togglePinWindow() {
+        isPinnedAlwaysOnTop.toggle()
+        showToast(isPinnedAlwaysOnTop ? "📌 Window Pinned (Always on Top)" : "📌 Window Unpinned (Normal)")
+    }
+    
+    @Published public var hoverToSelect: Bool = false
+    
+    // Multi-Selection Helper
+    public func selectItem(
+        _ item: FileItem,
+        isShiftPressed: Bool = NSEvent.modifierFlags.contains(.shift),
+        isCommandPressed: Bool = NSEvent.modifierFlags.contains(.command)
+    ) {
+        if isCommandPressed {
+            if selectedURLs.contains(item.url) {
+                selectedURLs.remove(item.url)
+                if lastSelectedURL == item.url {
+                    lastSelectedURL = selectedURLs.first
+                }
+            } else {
+                selectedURLs.insert(item.url)
+                lastSelectedURL = item.url
+            }
+        } else if isShiftPressed, let last = lastSelectedURL,
+                  let lastIdx = filteredItems.firstIndex(where: { $0.url == last }),
+                  let curIdx = filteredItems.firstIndex(where: { $0.url == item.url }) {
+            let start = min(lastIdx, curIdx)
+            let end = max(lastIdx, curIdx)
+            let range = filteredItems[start...end].map { $0.url }
+            selectedURLs = Set(range)
+            lastSelectedURL = item.url
+        } else {
+            selectedURLs = [item.url]
+            lastSelectedURL = item.url
+        }
+    }
     
     // Custom User Bookmarks / Favorites (Persisted in UserDefaults)
     @Published public var customBookmarks: [BookmarkItem] = [] {
@@ -191,6 +233,9 @@ public class NavigationState: ObservableObject {
         reload()
         startDirectoryWatcher()
         updateGitStatus()
+        DispatchQueue.main.async {
+            self.applyWindowPinning()
+        }
         
         NotificationCenter.default.addObserver(forName: .flashbrowseInspectorSelectedURL, object: nil, queue: .main) { [weak self] notif in
             guard let targetURL = notif.object as? URL else { return }

@@ -375,6 +375,13 @@ public struct IndexBrowserView: View {
                                 .fill(isSelected ? Color.flashbrowseAccent : (isHovered ? Color.flashbrowseAccent.opacity(0.12) : Color.clear))
                         )
                         .contentShape(Rectangle())
+                        // Drag & Drop
+                        .onDrag {
+                            if !selectedFileURLs.contains(item.url) {
+                                selectedFileURLs = [item.url]
+                            }
+                            return NSItemProvider(object: item.url as NSURL)
+                        }
                         // Instant Hover + Debounced Inspector
                         .onHover { hovering in
                             if hovering {
@@ -385,16 +392,31 @@ public struct IndexBrowserView: View {
                             }
                         }
                         .onTapGesture {
-                            if NSEvent.modifierFlags.contains(.command) {
+                            let isShift = NSEvent.modifierFlags.contains(.shift)
+                            let isCmd = NSEvent.modifierFlags.contains(.command)
+                            
+                            if isCmd {
                                 if selectedFileURLs.contains(item.url) {
                                     selectedFileURLs.remove(item.url)
                                 } else {
                                     selectedFileURLs.insert(item.url)
                                 }
+                            } else if isShift, let last = selectedFileURLs.first,
+                                      let lastIdx = filteredItemsInSelectedGroups.firstIndex(where: { $0.url == last }),
+                                      let curIdx = filteredItemsInSelectedGroups.firstIndex(where: { $0.url == item.url }) {
+                                let start = min(lastIdx, curIdx)
+                                let end = max(lastIdx, curIdx)
+                                let range = filteredItemsInSelectedGroups[start...end].map { $0.url }
+                                selectedFileURLs = Set(range)
                             } else {
                                 selectedFileURLs = [item.url]
                             }
                         }
+                        .simultaneousGesture(
+                            TapGesture(count: 2).onEnded {
+                                FileSystemService.shared.openItem(url: item.url)
+                            }
+                        )
                         .contextMenu {
                             let targets = selectedFileURLs.contains(item.url) ? Array(selectedFileURLs) : [item.url]
                             

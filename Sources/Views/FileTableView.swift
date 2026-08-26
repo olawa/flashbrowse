@@ -9,6 +9,8 @@ public struct FileTableView: View {
     @State private var showingDeleteConfirmation: Bool = false
     @State private var pendingDeleteURLs: [URL] = []
     @FocusState private var isRenameFieldFocused: Bool
+    @State private var lastClickedURL: URL?
+    @State private var lastClickTimestamp: Date = Date.distantPast
     
     public init(state: NavigationState) {
         self.state = state
@@ -277,11 +279,15 @@ public struct FileTableView: View {
                       : (isHovered ? Color.flashbrowseAccent.opacity(0.12) : Color.clear))
         )
         .contentShape(Rectangle())
-        // Drag & Drop to Sidebar
+        // Drag & Drop
         .onDrag {
-            NSItemProvider(object: item.url as NSURL)
+            if !state.selectedURLs.contains(item.url) {
+                state.selectedURLs = [item.url]
+                state.lastSelectedURL = item.url
+            }
+            return NSItemProvider(object: item.url as NSURL)
         }
-        // Hover = Select (Instant visual + debounced inspector)
+        // Hover (visual tint only, never clobbers selection unless hoverToSelect is explicitly turned on)
         .onHover { hovering in
             if hovering {
                 hoveredURL = item.url
@@ -293,28 +299,53 @@ public struct FileTableView: View {
                 hoveredURL = nil
             }
         }
-        // Single Click vs Double Click
+        // Single Click, Multi-Select (Shift/Cmd), and Delayed Rename (Finder Style)
         .onTapGesture {
-            let wasJustActivated = Date().timeIntervalSince(AppDelegate.lastWindowActivationTime) < 0.25
+            let now = Date()
+            let isShift = NSEvent.modifierFlags.contains(.shift)
+            let isCmd = NSEvent.modifierFlags.contains(.command)
+            
+            // Inactive window safety check
+            let wasJustActivated = now.timeIntervalSince(AppDelegate.lastWindowActivationTime) < 0.25
             if wasJustActivated {
-                state.selectedURLs = [item.url]
-                state.lastSelectedURL = item.url
+                state.selectItem(item, isShiftPressed: false, isCommandPressed: false)
+                lastClickedURL = item.url
+                lastClickTimestamp = now
                 return
             }
+            
+            // Multi-selection if Shift or Command is held
+            if isShift || isCmd {
+                state.selectItem(item, isShiftPressed: isShift, isCommandPressed: isCmd)
+                lastClickedURL = item.url
+                lastClickTimestamp = now
+                return
+            }
+            
+            // Finder-Style Delayed Click on Already-Selected Item to Rename
+            let isAlreadySingleSelected = state.selectedURLs.contains(item.url) && state.selectedURLs.count == 1
+            let timeSinceLastClick = now.timeIntervalSince(lastClickTimestamp)
+            
+            if isAlreadySingleSelected && lastClickedURL == item.url && timeSinceLastClick > 0.45 && timeSinceLastClick < 2.5 {
+                state.startRename(url: item.url)
+                lastClickedURL = nil
+                return
+            }
+            
+            lastClickedURL = item.url
+            lastClickTimestamp = now
             
             switch state.clickMode {
             case .foldersOnly:
                 if item.isDirectory {
                     state.openItem(item)
                 } else {
-                    state.selectedURLs = [item.url]
-                    state.lastSelectedURL = item.url
+                    state.selectItem(item, isShiftPressed: false, isCommandPressed: false)
                 }
             case .always:
                 state.openItem(item)
             case .doubleClick:
-                state.selectedURLs = [item.url]
-                state.lastSelectedURL = item.url
+                state.selectItem(item, isShiftPressed: false, isCommandPressed: false)
             }
         }
         .simultaneousGesture(
@@ -423,11 +454,15 @@ public struct FileTableView: View {
                 .stroke(isSelected ? Color.clear : (isHovered ? Color.flashbrowseAccent.opacity(0.5) : Color(nsColor: .separatorColor).opacity(0.3)), lineWidth: 1)
         )
         .contentShape(Rectangle())
-        // Drag & Drop to Sidebar
+        // Drag & Drop
         .onDrag {
-            NSItemProvider(object: item.url as NSURL)
+            if !state.selectedURLs.contains(item.url) {
+                state.selectedURLs = [item.url]
+                state.lastSelectedURL = item.url
+            }
+            return NSItemProvider(object: item.url as NSURL)
         }
-        // Hover = Select
+        // Hover (visual tint only, never clobbers selection unless hoverToSelect is explicitly turned on)
         .onHover { hovering in
             if hovering {
                 hoveredURL = item.url
@@ -439,28 +474,53 @@ public struct FileTableView: View {
                 hoveredURL = nil
             }
         }
-        // Single Click vs Double Click
+        // Single Click, Multi-Select (Shift/Cmd), and Delayed Rename (Finder Style)
         .onTapGesture {
-            let wasJustActivated = Date().timeIntervalSince(AppDelegate.lastWindowActivationTime) < 0.25
+            let now = Date()
+            let isShift = NSEvent.modifierFlags.contains(.shift)
+            let isCmd = NSEvent.modifierFlags.contains(.command)
+            
+            // Inactive window safety check
+            let wasJustActivated = now.timeIntervalSince(AppDelegate.lastWindowActivationTime) < 0.25
             if wasJustActivated {
-                state.selectedURLs = [item.url]
-                state.lastSelectedURL = item.url
+                state.selectItem(item, isShiftPressed: false, isCommandPressed: false)
+                lastClickedURL = item.url
+                lastClickTimestamp = now
                 return
             }
+            
+            // Multi-selection if Shift or Command is held
+            if isShift || isCmd {
+                state.selectItem(item, isShiftPressed: isShift, isCommandPressed: isCmd)
+                lastClickedURL = item.url
+                lastClickTimestamp = now
+                return
+            }
+            
+            // Finder-Style Delayed Click on Already-Selected Item to Rename
+            let isAlreadySingleSelected = state.selectedURLs.contains(item.url) && state.selectedURLs.count == 1
+            let timeSinceLastClick = now.timeIntervalSince(lastClickTimestamp)
+            
+            if isAlreadySingleSelected && lastClickedURL == item.url && timeSinceLastClick > 0.45 && timeSinceLastClick < 2.5 {
+                state.startRename(url: item.url)
+                lastClickedURL = nil
+                return
+            }
+            
+            lastClickedURL = item.url
+            lastClickTimestamp = now
             
             switch state.clickMode {
             case .foldersOnly:
                 if item.isDirectory {
                     state.openItem(item)
                 } else {
-                    state.selectedURLs = [item.url]
-                    state.lastSelectedURL = item.url
+                    state.selectItem(item, isShiftPressed: false, isCommandPressed: false)
                 }
             case .always:
                 state.openItem(item)
             case .doubleClick:
-                state.selectedURLs = [item.url]
-                state.lastSelectedURL = item.url
+                state.selectItem(item, isShiftPressed: false, isCommandPressed: false)
             }
         }
         .simultaneousGesture(
