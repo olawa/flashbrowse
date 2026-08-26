@@ -49,8 +49,8 @@ public class TerminalService: ObservableObject {
     
     public func appendLine(_ text: String, isError: Bool = false, isPrompt: Bool = false) {
         outputLines.append(TerminalOutputLine(text: text, isError: isError, isPrompt: isPrompt))
-        if outputLines.count > 1000 {
-            outputLines.removeFirst(outputLines.count - 1000)
+        if outputLines.count > 1500 {
+            outputLines.removeFirst(outputLines.count - 1500)
         }
     }
     
@@ -136,6 +136,11 @@ public class TerminalService: ObservableObject {
             return
         }
         
+        if trimmed == "pwd" {
+            appendLine(workingDirectory.path)
+            return
+        }
+        
         // 2-Way CD: Move Terminal AND Move Browser!
         if trimmed == "cd" {
             let home = FileManager.default.homeDirectoryForCurrentUser
@@ -164,13 +169,24 @@ public class TerminalService: ObservableObject {
         // Execute shell subprocess
         runSubprocess(
             executableURL: URL(fileURLWithPath: "/bin/zsh"),
-            arguments: ["-l", "-c", "cd '\(workingDirectory.path)' && \(trimmed)"],
+            arguments: ["-c", "cd '\(workingDirectory.path)' && \(trimmed)"],
             environment: ProcessInfo.processInfo.environment
         )
     }
     
     private func handleLocalCD(path: String) {
-        let expanded = NSString(string: path).expandingTildeInPath
+        var cleanPath = path
+        
+        // Auto-translate Linux paths like /home/username or /home/users/username to macOS /Users/username
+        let user = NSUserName()
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        if cleanPath.hasPrefix("/home/\(user)") {
+            cleanPath = cleanPath.replacingOccurrences(of: "/home/\(user)", with: homePath)
+        } else if cleanPath.hasPrefix("/home/users/\(user)") {
+            cleanPath = cleanPath.replacingOccurrences(of: "/home/users/\(user)", with: homePath)
+        }
+        
+        let expanded = NSString(string: cleanPath).expandingTildeInPath
         let targetURL: URL
         if expanded.hasPrefix("/") {
             targetURL = URL(fileURLWithPath: expanded).standardized
@@ -254,63 +270,63 @@ public class TerminalService: ObservableObject {
         onRemoteDirectoryChange?(newPath)
     }
     
-    // MARK: - Subprocess Streaming Helper
+    // MARK: - Subprocess Execution without pipe race conditions
     private func runSubprocess(executableURL: URL, arguments: [String], environment: [String: String]) {
         isRunningCommand = true
-        let process = Process()
-        let pipe = Pipe()
-        let errPipe = Pipe()
         
-        process.executableURL = executableURL
-        process.arguments = arguments
-        var env = environment
-        env["TERM"] = "xterm-256color"
-        process.environment = env
-        
-        self.activeProcess = process
-        
-        let outHandle = pipe.fileHandleForReading
-        let errHandle = errPipe.fileHandleForReading
-        
-        outHandle.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-            if let str = String(data: data, encoding: .utf8) {
-                Task { @MainActor in
-                    for line in str.components(separatedBy: "\n") where !line.isEmpty {
-                        self?.appendLine(line)
+        Task.detached(priority: .userInitiated) {
+            let process = Process()
+            let outPipe = Pipe()
+            let errPipe = Pipe()
+            
+            process.executableURL = executableURL
+            process.arguments = arguments
+            var env = environment
+            env["TERM"] = "xterm-256color"
+            process.environment = env
+            process.standardOutput = outPipe
+            process.standardError = errPipe
+            
+            await MainActor.run {
+                self.activeProcess = process
+            }
+            
+            do {
+                try process.run()
+                
+                // Read stdout and stderr completely
+                let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
+                let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                
+                let outStr = String(data: outData, encoding: .utf8) ?? ""
+                let errStr = String(data: errData, encoding: .utf8) ?? ""
+                
+                await MainActor.run {
+                    if !outStr.isEmpty {
+                        for line in outStr.components(separatedBy: "\n") {
+                            if !line.isEmpty {
+                                self.appendLine(line)
+                            }
+                        }
                     }
+                    if !errStr.isEmpty {
+                        for line in errStr.components(separatedBy: "\n") {
+                            if !line.isEmpty {
+                                self.appendLine(line, isError: true)
+                            }
+                        }
+                    }
+                    self.isRunningCommand = false
+                    self.activeProcess = nil
+                }
+            } catch {
+                await MainActor.run {
+                    self.appendLine("Execution error: \(error.localizedDescription)", isError: true)
+                    self.isRunningCommand = false
+                    self.activeProcess = nil
                 }
             }
-        }
-        
-        errHandle.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-            if let str = String(data: data, encoding: .utf8) {
-                Task { @MainActor in
-                    for line in str.components(separatedBy: "\n") where !line.isEmpty {
-                        self?.appendLine(line, isError: true)
-                    }
-                }
-            }
-        }
-        
-        process.terminationHandler = { [weak self] _ in
-            Task { @MainActor in
-                outHandle.readabilityHandler = nil
-                errHandle.readabilityHandler = nil
-                self?.isRunningCommand = false
-                self?.activeProcess = nil
-            }
-        }
-        
-        do {
-            try process.run()
-        } catch {
-            appendLine("Execution error: \(error.localizedDescription)", isError: true)
-            isRunningCommand = false
-            activeProcess = nil
         }
     }
 }
