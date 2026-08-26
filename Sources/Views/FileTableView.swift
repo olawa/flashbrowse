@@ -287,13 +287,15 @@ public struct FileTableView: View {
             }
             return NSItemProvider(object: item.url as NSURL)
         }
-        // Hover (visual tint only, never clobbers selection unless hoverToSelect is explicitly turned on)
+        // Hover: Smart Live Preview for images/logs/text WITHOUT altering selection!
         .onHover { hovering in
             if hovering {
                 hoveredURL = item.url
                 if state.hoverToSelect {
                     state.selectedURLs = [item.url]
                     state.lastSelectedURL = item.url
+                } else if state.smartHoverPreview && NavigationState.isSmartHoverPreviewCandidate(item: item) {
+                    state.scheduleInspectorUpdate(url: item.url)
                 }
             } else if hoveredURL == item.url {
                 hoveredURL = nil
@@ -462,13 +464,15 @@ public struct FileTableView: View {
             }
             return NSItemProvider(object: item.url as NSURL)
         }
-        // Hover (visual tint only, never clobbers selection unless hoverToSelect is explicitly turned on)
+        // Hover: Smart Live Preview for images/logs/text WITHOUT altering selection!
         .onHover { hovering in
             if hovering {
                 hoveredURL = item.url
                 if state.hoverToSelect {
                     state.selectedURLs = [item.url]
                     state.lastSelectedURL = item.url
+                } else if state.smartHoverPreview && NavigationState.isSmartHoverPreviewCandidate(item: item) {
+                    state.scheduleInspectorUpdate(url: item.url)
                 }
             } else if hoveredURL == item.url {
                 hoveredURL = nil

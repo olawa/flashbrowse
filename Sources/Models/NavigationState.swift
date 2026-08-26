@@ -139,14 +139,55 @@ public class NavigationState: ObservableObject {
     }
     
     public func applyWindowPinning() {
-        for window in NSApp.windows where !(window is NSPanel) && window.isVisible {
+        for window in NSApp.windows where !(window is NSPanel) {
             window.level = isPinnedAlwaysOnTop ? .floating : .normal
         }
+        InspectorWindowController.shared.updateWindowLevel()
     }
     
     public func togglePinWindow() {
         isPinnedAlwaysOnTop.toggle()
         showToast(isPinnedAlwaysOnTop ? "📌 Window Pinned (Always on Top)" : "📌 Window Unpinned (Normal)")
+    }
+    
+    // Smart Hover Preview (Previews images, scripts, logs, text on hover WITHOUT altering file selection)
+    @Published public var smartHoverPreview: Bool = {
+        if UserDefaults.standard.object(forKey: "flashbrowse_smart_hover_preview") != nil {
+            return UserDefaults.standard.bool(forKey: "flashbrowse_smart_hover_preview")
+        }
+        return true // Enabled by default
+    }() {
+        didSet {
+            UserDefaults.standard.set(smartHoverPreview, forKey: "flashbrowse_smart_hover_preview")
+        }
+    }
+    
+    public static func isSmartHoverPreviewCandidate(item: FileItem) -> Bool {
+        if item.isDirectory { return false }
+        let ext = item.url.pathExtension.lowercased()
+        
+        // 1. All images (PNG, JPG, JPEG, WEBP, GIF, SVG, TIFF, HEIC, etc.)
+        if SharedInspectorState.imageExtensions.contains(ext) {
+            return true
+        }
+        
+        // 2. Text files, logs, scripts, markdown, code, config (< 5 MB)
+        let textExtensions: Set<String> = [
+            "log", "txt", "text", "md", "markdown", "py", "sh", "bash", "zsh",
+            "json", "csv", "tsv", "tab", "yaml", "yml", "xml", "html", "htm",
+            "css", "js", "ts", "swift", "c", "cpp", "h", "hpp", "r", "rs",
+            "go", "java", "kt", "sql", "fasta", "fa", "bed", "gtf", "gff"
+        ]
+        if textExtensions.contains(ext) {
+            return (item.size ?? 0) < 5 * 1024 * 1024 // < 5MB
+        }
+        
+        // 3. Audio & small PDFs (< 10 MB)
+        if ["pdf", "mp3", "wav", "m4a", "flac", "ogg"].contains(ext) {
+            return (item.size ?? 0) < 10 * 1024 * 1024 // < 10MB
+        }
+        
+        return false
     }
     
     @Published public var hoverToSelect: Bool = false
@@ -272,7 +313,7 @@ public class NavigationState: ObservableObject {
     public func scheduleInspectorUpdate(url: URL?) {
         inspectorDebounceTask?.cancel()
         inspectorDebounceTask = Task {
-            try? await Task.sleep(nanoseconds: 100_000_000)
+            try? await Task.sleep(nanoseconds: 35_000_000) // 35ms fast & smooth debounce
             if !Task.isCancelled {
                 SharedInspectorState.shared.updateTarget(url: url)
             }

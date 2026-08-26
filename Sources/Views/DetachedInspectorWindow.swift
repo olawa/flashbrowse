@@ -221,13 +221,7 @@ public struct InspectorView: View {
     @AppStorage("flashbrowse_inspector_dark_theme") private var isDarkTheme: Bool = true
     @State private var tableFilter: String = ""
     
-    public var isEmbeddedSidePanel: Bool
-    public var onClose: (() -> Void)?
-    
-    public init(isEmbeddedSidePanel: Bool = false, onClose: (() -> Void)? = nil) {
-        self.isEmbeddedSidePanel = isEmbeddedSidePanel
-        self.onClose = onClose
-    }
+    public init() {}
     
     // Theme Palette Colors
     private var bgColor: Color {
@@ -250,7 +244,7 @@ public struct InspectorView: View {
         VStack(spacing: 0) {
             // Header Bar
             HStack(spacing: 6) {
-                Image(systemName: isEmbeddedSidePanel ? "sidebar.right" : "display.2")
+                Image(systemName: "sidebar.right")
                     .foregroundColor(Color.flashbrowseAccent)
                     .font(.system(size: 13))
                 
@@ -266,7 +260,7 @@ public struct InspectorView: View {
                         Text("Source").tag(1)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: isEmbeddedSidePanel ? 130 : 160)
+                    .frame(width: 140)
                     .padding(.leading, 2)
                 } else if state.contentType == .spreadsheet && !state.parsedTableRows.isEmpty {
                     Picker("", selection: $renderMode) {
@@ -274,7 +268,7 @@ public struct InspectorView: View {
                         Text("Sheet").tag(1)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: isEmbeddedSidePanel ? 120 : 160)
+                    .frame(width: 130)
                     .padding(.leading, 2)
                 } else if state.contentType == .image {
                     // Photo Culling & Lightbox Controls
@@ -330,22 +324,22 @@ public struct InspectorView: View {
                 
                 Spacer()
                 
-                // If embedded, button to Pop Out to iPad / External Window
-                if isEmbeddedSidePanel {
-                    Button(action: {
-                        InspectorWindowController.shared.showWindow()
-                    }) {
-                        Image(systemName: "display.2")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 3)
-                            .background(cardBgColor)
-                            .cornerRadius(4)
+                // Dock alongside main window / Move to iPad button
+                Button(action: {
+                    InspectorWindowController.shared.moveToExternalOrIPad()
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: NSScreen.screens.count > 1 ? "ipad.and.arrow.forward" : "arrow.right.to.line.compact")
+                        Text(NSScreen.screens.count > 1 ? "iPad" : "Snap")
+                            .font(.system(size: 10, weight: .semibold))
                     }
-                    .buttonStyle(.plain)
-                    .help("Pop Out Inspector to iPad or External Monitor (Cmd+Option+I)")
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(cardBgColor)
+                    .cornerRadius(4)
                 }
+                .buttonStyle(.plain)
+                .help(NSScreen.screens.count > 1 ? "Move to iPad or External Screen" : "Snap alongside Flashbrowse window")
                 
                 // Dark Theme Toggle
                 Button(action: {
@@ -362,38 +356,22 @@ public struct InspectorView: View {
                 .buttonStyle(.plain)
                 .help("Toggle Inspector Theme")
                 
-                if !isEmbeddedSidePanel {
-                    // Jump to Main Window Button (only in detached window)
-                    Button(action: {
-                        InspectorWindowController.shared.warpMouseToMainWindow()
-                    }) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "cursorarrow.motionlines")
-                            Text("Jump (Cmd+<)")
-                                .font(.system(size: 9, weight: .medium))
-                        }
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 3)
-                        .background(cardBgColor)
-                        .cornerRadius(4)
+                // Jump to Main Window Button
+                Button(action: {
+                    InspectorWindowController.shared.warpMouseToMainWindow()
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "cursorarrow.motionlines")
+                        Text("Jump (Cmd+<)")
+                            .font(.system(size: 9, weight: .medium))
                     }
-                    .buttonStyle(.plain)
-                    .help("Teleport cursor to main window (Cmd+<)")
-                } else {
-                    // Close side panel button
-                    Button(action: {
-                        onClose?()
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.secondary)
-                            .padding(4)
-                            .background(cardBgColor)
-                            .cornerRadius(4)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Close Inspector Side Panel")
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 3)
+                    .background(cardBgColor)
+                    .cornerRadius(4)
                 }
+                .buttonStyle(.plain)
+                .help("Teleport cursor to main window (Cmd+<)")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -1193,11 +1171,42 @@ public class InspectorHostingView<Content: View>: NSHostingView<Content> {
     }
 }
 
-// MARK: - Multi-Monitor Window Controller
+// MARK: - Multi-Monitor & Docked Companion Window Controller
 @MainActor
-public class InspectorWindowController: NSObject {
+public class InspectorWindowController: NSObject, NSWindowDelegate {
     public static let shared = InspectorWindowController()
     public var window: NSWindow?
+    public var isDocked: Bool = true
+    
+    public override init() {
+        super.init()
+        setupObservers()
+    }
+    
+    private func setupObservers() {
+        // When main window moves or resizes, companion inspector follows along if docked
+        NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: nil, queue: .main) { [weak self] notif in
+            Task { @MainActor [weak self] in
+                guard let self = self, let win = self.window, win.isVisible, self.isDocked else { return }
+                if let movedWin = notif.object as? NSWindow, movedWin != win, !(movedWin is NSPanel) {
+                    if movedWin.screen == win.screen {
+                        self.dockAlongside(mainWindow: movedWin)
+                    }
+                }
+            }
+        }
+        
+        NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification, object: nil, queue: .main) { [weak self] notif in
+            Task { @MainActor [weak self] in
+                guard let self = self, let win = self.window, win.isVisible, self.isDocked else { return }
+                if let resizedWin = notif.object as? NSWindow, resizedWin != win, !(resizedWin is NSPanel) {
+                    if resizedWin.screen == win.screen {
+                        self.dockAlongside(mainWindow: resizedWin)
+                    }
+                }
+            }
+        }
+    }
     
     public func toggleWindow() {
         if let win = window, win.isVisible {
@@ -1211,42 +1220,109 @@ public class InspectorWindowController: NSObject {
     public func showWindow() {
         if window == nil {
             let win = NSWindow(
-                contentRect: NSRect(x: 100, y: 100, width: 850, height: 600),
+                contentRect: NSRect(x: 100, y: 100, width: 500, height: 700),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
-            win.title = "Flashbrowse Inspector (Multi-Monitor)"
+            win.title = "Flashbrowse Inspector"
             win.isReleasedWhenClosed = false
             win.acceptsMouseMovedEvents = true
             win.contentView = InspectorHostingView(rootView: InspectorView())
+            win.delegate = self
             self.window = win
         }
         
-        window?.makeKeyAndOrderFront(nil)
+        guard let win = window else { return }
+        
+        // Match window level with Pinning / Always on Top
+        updateWindowLevel()
+        
+        // Multi-monitor / iPad Sidecar check:
+        let screens = NSScreen.screens
+        if screens.count > 1, let externalScreen = screens.first(where: { $0 != NSScreen.main }) {
+            win.setFrame(externalScreen.visibleFrame, display: true, animate: false)
+            self.isDocked = false
+        } else {
+            // Single screen: dock cleanly alongside the main window!
+            if let mainWin = NSApp.windows.first(where: { $0 != win && $0.isVisible && !($0 is NSPanel) }) {
+                dockAlongside(mainWindow: mainWin)
+            }
+            self.isDocked = true
+        }
+        
+        win.makeKeyAndOrderFront(nil)
         SharedInspectorState.shared.isInspectorWindowOpen = true
+    }
+    
+    public func dockAlongside(mainWindow: NSWindow) {
+        guard let win = window, win.isVisible else { return }
+        guard let screen = mainWindow.screen ?? NSScreen.main else { return }
+        let mainFrame = mainWindow.frame
+        let screenVisible = screen.visibleFrame
+        
+        let desiredWidth: CGFloat = min(max(win.frame.width, 420), 650)
+        let spacing: CGFloat = 2
+        
+        var newX = mainFrame.maxX + spacing
+        let newY = mainFrame.minY
+        let newHeight = mainFrame.height
+        var newWidth = desiredWidth
+        
+        // If it goes beyond the right edge of screen, adjust main window or fit width
+        if newX + newWidth > screenVisible.maxX {
+            let overflow = (newX + newWidth) - screenVisible.maxX
+            if mainFrame.minX - overflow >= screenVisible.minX {
+                mainWindow.setFrame(NSRect(x: mainFrame.minX - overflow, y: mainFrame.minY, width: mainFrame.width, height: mainFrame.height), display: true)
+                newX = (mainFrame.minX - overflow) + mainFrame.width + spacing
+            } else {
+                newWidth = max(360, screenVisible.maxX - newX)
+            }
+        }
+        
+        win.setFrame(NSRect(x: newX, y: newY, width: newWidth, height: newHeight), display: true)
+        self.isDocked = true
+    }
+    
+    public func moveToExternalOrIPad() {
+        guard let win = window else { return }
+        let screens = NSScreen.screens
+        if screens.count > 1, let externalScreen = screens.first(where: { $0 != NSScreen.main }) {
+            win.setFrame(externalScreen.visibleFrame, display: true, animate: true)
+            self.isDocked = false
+        } else {
+            // Single screen: re-dock
+            if let mainWin = NSApp.windows.first(where: { $0 != win && $0.isVisible && !($0 is NSPanel) }) {
+                dockAlongside(mainWindow: mainWin)
+            }
+        }
+    }
+    
+    public func updateWindowLevel() {
+        let isPinned = UserDefaults.standard.bool(forKey: "flashbrowse_always_on_top")
+        window?.level = isPinned ? .floating : .normal
+    }
+    
+    public func windowWillClose(_ notification: Notification) {
+        SharedInspectorState.shared.isInspectorWindowOpen = false
     }
     
     public func warpMouseToInspector() {
         showWindow()
         guard let win = window else { return }
-        
         let frame = win.frame
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 1080
         let targetPoint = CGPoint(x: frame.midX, y: primaryHeight - frame.midY)
-        
         CGWarpMouseCursorPosition(targetPoint)
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
     
     public func warpMouseToMainWindow() {
-        guard let mainWin = NSApp.windows.first(where: { $0 != self.window && $0.isVisible }) else { return }
-        
+        guard let mainWin = NSApp.windows.first(where: { $0 != self.window && $0.isVisible && !($0 is NSPanel) }) else { return }
         let frame = mainWin.frame
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 1080
         let targetPoint = CGPoint(x: frame.midX, y: primaryHeight - frame.midY)
-        
         CGWarpMouseCursorPosition(targetPoint)
         mainWin.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

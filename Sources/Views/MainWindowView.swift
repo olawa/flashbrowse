@@ -25,40 +25,26 @@ public struct MainWindowView: View {
             NavigationSplitView {
                 SidebarView(state: currentActiveState)
             } detail: {
-                HSplitView {
-                    VStack(spacing: 0) {
-                        if sshService.isRemoteBrowserOpen {
-                            RemoteBrowserView(localState: currentActiveState)
-                        } else if indexService.activeIndex != nil {
-                            IndexBrowserView(navState: currentActiveState)
-                        } else {
-                            DualPaneContainerView(
-                                leftState: leftState,
-                                rightState: rightState,
-                                activePane: $activePane,
-                                isDualPane: $isDualPane,
-                                isCommanderMode: $isCommanderMode
-                            )
-                        }
-                        
-                        // Embedded Terminal Drawer (VS Code style)
-                        if terminalService.isOpen {
-                            Divider()
-                            TerminalPanelView()
-                                .transition(.move(edge: .bottom))
-                        }
+                VStack(spacing: 0) {
+                    if sshService.isRemoteBrowserOpen {
+                        RemoteBrowserView(localState: currentActiveState)
+                    } else if indexService.activeIndex != nil {
+                        IndexBrowserView(navState: currentActiveState)
+                    } else {
+                        DualPaneContainerView(
+                            leftState: leftState,
+                            rightState: rightState,
+                            activePane: $activePane,
+                            isDualPane: $isDualPane,
+                            isCommanderMode: $isCommanderMode
+                        )
                     }
-                    .frame(minWidth: 420)
                     
-                    // Embedded Side Inspector Panel (Default ON)
-                    if isSideInspectorOpen && !inspectorState.isInspectorWindowOpen {
-                        InspectorView(isEmbeddedSidePanel: true, onClose: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                isSideInspectorOpen = false
-                            }
-                        })
-                        .frame(minWidth: 260, idealWidth: 320, maxWidth: 550)
-                        .transition(.move(edge: .trailing))
+                    // Embedded Terminal Drawer (VS Code style)
+                    if terminalService.isOpen {
+                        Divider()
+                        TerminalPanelView()
+                            .transition(.move(edge: .bottom))
                     }
                 }
             }
@@ -195,25 +181,20 @@ public struct MainWindowView: View {
                 }
                 .help("Batch Rename Tool (Cmd+Shift+R)")
                 
-                // Integrated Side Inspector Panel Toggle (Cmd+I)
-                Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        isSideInspectorOpen.toggle()
-                    }
-                }) {
-                    Image(systemName: "sidebar.right")
-                        .foregroundColor(isSideInspectorOpen && !inspectorState.isInspectorWindowOpen ? Color.flashbrowseAccent : .primary)
-                }
-                .help("Toggle Inspector Side Panel (Cmd+I)")
-                
-                // Detached Multi-Monitor / iPad Inspector (Cmd+Option+I)
+                // Inspector Companion & iPad Window Toggle (Cmd+I / Cmd+Option+I)
                 Button(action: {
                     InspectorWindowController.shared.toggleWindow()
                 }) {
-                    Image(systemName: "display.2")
-                        .foregroundColor(inspectorState.isInspectorWindowOpen ? Color.flashbrowseAccent : .primary)
+                    HStack(spacing: 3) {
+                        Image(systemName: inspectorState.isInspectorWindowOpen ? "display.2" : "sidebar.right")
+                        if inspectorState.isInspectorWindowOpen {
+                            Text("Inspector")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                    }
+                    .foregroundColor(inspectorState.isInspectorWindowOpen ? Color.flashbrowseAccent : .primary)
                 }
-                .help("Pop Out Inspector to iPad or External Monitor (Cmd+Option+I)")
+                .help("Toggle Inspector Companion / iPad Window (Cmd+I / Cmd+Option+I)")
             }
         }
         .sheet(isPresented: $showingBatchRename) {
@@ -233,6 +214,11 @@ public struct MainWindowView: View {
         }
         .onAppear {
             updateTerminalCallback()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                if UserDefaults.standard.object(forKey: "flashbrowse_auto_open_inspector") == nil || UserDefaults.standard.bool(forKey: "flashbrowse_auto_open_inspector") {
+                    InspectorWindowController.shared.showWindow()
+                }
+            }
         }
         .onChange(of: activePane) {
             updateTerminalCallback()

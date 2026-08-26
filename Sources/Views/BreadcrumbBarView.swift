@@ -273,7 +273,8 @@ public struct BreadcrumbBarView: View {
                         Text("🖱️ Double Click All").tag(ClickOpenMode.doubleClick)
                     }
                     
-                    Toggle("Hover to Select", isOn: $state.hoverToSelect)
+                    Toggle("⚡ Smart Hover Preview (Images & Text)", isOn: $state.smartHoverPreview)
+                    Toggle("Hover to Select (Legacy)", isOn: $state.hoverToSelect)
                 }
                 
                 Divider()

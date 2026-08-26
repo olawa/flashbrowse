@@ -382,11 +382,13 @@ public struct IndexBrowserView: View {
                             }
                             return NSItemProvider(object: item.url as NSURL)
                         }
-                        // Instant Hover + Debounced Inspector
+                        // Smart Hover Preview
                         .onHover { hovering in
                             if hovering {
                                 hoveredURL = item.url
-                                navState.scheduleInspectorUpdate(url: item.url)
+                                if navState.smartHoverPreview && NavigationState.isSmartHoverPreviewCandidate(item: item) {
+                                    navState.scheduleInspectorUpdate(url: item.url)
+                                }
                             } else if hoveredURL == item.url {
                                 hoveredURL = nil
                             }
