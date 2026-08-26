@@ -47,7 +47,7 @@ public struct TerminalPanelView: View {
                             .font(.system(size: 10, weight: .bold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(!terminalService.isSSHTerminalMode ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+                            .background(!terminalService.isSSHTerminalMode ? Color.flashbrowseAccent : Color.clear)
                             .foregroundColor(!terminalService.isSSHTerminalMode ? .white : .secondary)
                             .cornerRadius(4)
                         }
@@ -75,7 +75,7 @@ public struct TerminalPanelView: View {
                 } else {
                     HStack(spacing: 5) {
                         Image(systemName: "terminal.fill")
-                            .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                            .foregroundColor(Color.flashbrowseAccent)
                             .font(.system(size: 11))
                         
                         Text("TERMINAL (zsh)")
@@ -113,12 +113,12 @@ public struct TerminalPanelView: View {
                         Text(terminalService.autoSyncWithBrowser ? "2-Way Sync: ON" : "2-Way Sync: OFF")
                             .font(.system(size: 9, weight: .bold))
                     }
-                    .foregroundColor(terminalService.autoSyncWithBrowser ? Color(red: 0.91, green: 0.33, blue: 0.13) : .secondary)
+                    .foregroundColor(terminalService.autoSyncWithBrowser ? Color.flashbrowseAccent : .secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(
                         terminalService.autoSyncWithBrowser
-                        ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.2)
+                        ? Color.flashbrowseAccent.opacity(0.2)
                         : Color.white.opacity(0.08)
                     )
                     .cornerRadius(4)
@@ -208,7 +208,7 @@ public struct TerminalPanelView: View {
             HStack(spacing: 6) {
                 Text(leftPromptText)
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundColor(terminalService.isSSHTerminalMode && !terminalService.isDualTerminalSplit ? Color.green : Color(red: 0.91, green: 0.33, blue: 0.13))
+                    .foregroundColor(terminalService.isSSHTerminalMode && !terminalService.isDualTerminalSplit ? Color.green : Color.flashbrowseAccent)
                 
                 TextField("", text: $inputCommand)
                     .textFieldStyle(.plain)

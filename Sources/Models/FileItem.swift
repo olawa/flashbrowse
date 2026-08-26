@@ -94,12 +94,9 @@ public struct FileItem: Identifiable, Hashable {
             self.category = .folder
             self.kindDescription = "Folder"
             self.sfSymbolName = "folder.fill"
-            self.categoryColor = Color(red: 0.91, green: 0.33, blue: 0.13) // Ubuntu Orange #E95420
+            self.categoryColor = Color.flashbrowseAccent // Ubuntu Orange #E95420
             
-            // Quick item count calculation
-            if let entries = try? FileManager.default.contentsOfDirectory(atPath: url.path) {
-                self.itemCount = entries.filter { !$0.hasPrefix(".") }.count
-            }
+            // Item count loaded lazily to avoid blocking main thread
         } else {
             switch ext {
             case "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic":

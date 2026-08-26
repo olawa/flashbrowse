@@ -161,26 +161,44 @@ public class FileSystemService {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
     
-    public func moveToTrash(urls: [URL]) {
+    public func moveToTrash(urls: [URL]) -> [String] {
+        var errors: [String] = []
         for url in urls {
-            try? FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            do {
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            } catch {
+                errors.append("\(url.lastPathComponent): \(error.localizedDescription)")
+            }
         }
+        return errors
     }
     
-    public func copyItems(urls: [URL], to destinationDirectory: URL) {
+    public func copyItems(urls: [URL], to destinationDirectory: URL) -> [String] {
         let fm = FileManager.default
+        var errors: [String] = []
         for url in urls {
             let dest = destinationDirectory.appendingPathComponent(url.lastPathComponent)
-            try? fm.copyItem(at: url, to: dest)
+            do {
+                try fm.copyItem(at: url, to: dest)
+            } catch {
+                errors.append("\(url.lastPathComponent): \(error.localizedDescription)")
+            }
         }
+        return errors
     }
     
-    public func moveItems(urls: [URL], to destinationDirectory: URL) {
+    public func moveItems(urls: [URL], to destinationDirectory: URL) -> [String] {
         let fm = FileManager.default
+        var errors: [String] = []
         for url in urls {
             let dest = destinationDirectory.appendingPathComponent(url.lastPathComponent)
-            try? fm.moveItem(at: url, to: dest)
+            do {
+                try fm.moveItem(at: url, to: dest)
+            } catch {
+                errors.append("\(url.lastPathComponent): \(error.localizedDescription)")
+            }
         }
+        return errors
     }
     
     public func createDirectory(named name: String, in parentURL: URL) {

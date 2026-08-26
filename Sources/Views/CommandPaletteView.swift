@@ -163,7 +163,7 @@ public struct CommandPaletteView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 16))
-                        .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                        .foregroundColor(Color.flashbrowseAccent)
                     
                     TextField("Type a command, folder name, or action...", text: $searchText)
                         .textFieldStyle(.plain)
@@ -203,7 +203,7 @@ public struct CommandPaletteView: View {
                                     HStack(spacing: 10) {
                                         Image(systemName: cmd.icon)
                                             .font(.system(size: 14))
-                                            .foregroundColor(isSelected ? .white : Color(red: 0.91, green: 0.33, blue: 0.13))
+                                            .foregroundColor(isSelected ? .white : Color.flashbrowseAccent)
                                             .frame(width: 22)
                                         
                                         VStack(alignment: .leading, spacing: 1) {
@@ -230,7 +230,7 @@ public struct CommandPaletteView: View {
                                     .padding(.vertical, 7)
                                     .background(
                                         RoundedRectangle(cornerRadius: 6)
-                                            .fill(isSelected ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+                                            .fill(isSelected ? Color.flashbrowseAccent : Color.clear)
                                     )
                                 }
                                 .buttonStyle(.plain)

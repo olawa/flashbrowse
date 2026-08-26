@@ -22,24 +22,40 @@ struct FlashbrowseApp: App {
                 
                 Divider()
                 
-                Button("Switch to Workspace 1") {}
+                Button("Switch to Workspace 1") {
+                    NotificationCenter.default.post(name: .flashbrowseSwitchWorkspace, object: 1)
+                }
                     .keyboardShortcut("1", modifiers: .command)
-                Button("Switch to Workspace 2") {}
+                Button("Switch to Workspace 2") {
+                    NotificationCenter.default.post(name: .flashbrowseSwitchWorkspace, object: 2)
+                }
                     .keyboardShortcut("2", modifiers: .command)
-                Button("Switch to Workspace 3") {}
+                Button("Switch to Workspace 3") {
+                    NotificationCenter.default.post(name: .flashbrowseSwitchWorkspace, object: 3)
+                }
                     .keyboardShortcut("3", modifiers: .command)
-                Button("Switch to Workspace 4") {}
+                Button("Switch to Workspace 4") {
+                    NotificationCenter.default.post(name: .flashbrowseSwitchWorkspace, object: 4)
+                }
                     .keyboardShortcut("4", modifiers: .command)
                 
                 Divider()
                 
-                Button("Save Layout to Workspace 1") {}
+                Button("Save Layout to Workspace 1") {
+                    NotificationCenter.default.post(name: .flashbrowseSaveWorkspace, object: 1)
+                }
                     .keyboardShortcut("1", modifiers: [.command, .option])
-                Button("Save Layout to Workspace 2") {}
+                Button("Save Layout to Workspace 2") {
+                    NotificationCenter.default.post(name: .flashbrowseSaveWorkspace, object: 2)
+                }
                     .keyboardShortcut("2", modifiers: [.command, .option])
-                Button("Save Layout to Workspace 3") {}
+                Button("Save Layout to Workspace 3") {
+                    NotificationCenter.default.post(name: .flashbrowseSaveWorkspace, object: 3)
+                }
                     .keyboardShortcut("3", modifiers: [.command, .option])
-                Button("Save Layout to Workspace 4") {}
+                Button("Save Layout to Workspace 4") {
+                    NotificationCenter.default.post(name: .flashbrowseSaveWorkspace, object: 4)
+                }
                     .keyboardShortcut("4", modifiers: [.command, .option])
             }
             

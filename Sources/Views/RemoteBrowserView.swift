@@ -67,7 +67,7 @@ public struct RemoteBrowserView: View {
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.right.circle.fill")
-                                .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                                .foregroundColor(Color.flashbrowseAccent)
                             Text("Upload to Remote ->")
                                 .font(.system(size: 11, weight: .semibold))
                         }
@@ -145,7 +145,7 @@ public struct RemoteBrowserView: View {
                 VStack(spacing: 0) {
                     HStack {
                         Image(systemName: "laptopcomputer")
-                            .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                            .foregroundColor(Color.flashbrowseAccent)
                             .font(.system(size: 12))
                         
                         Text("LOCAL: \(localState.currentDirectory.lastPathComponent)")
@@ -280,11 +280,11 @@ public struct RemoteBrowserView: View {
                 .frame(minWidth: 350)
                 .background(
                     RoundedRectangle(cornerRadius: 0)
-                        .fill(isRemoteDropTargeted ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.12) : Color.clear)
+                        .fill(isRemoteDropTargeted ? Color.flashbrowseAccent.opacity(0.12) : Color.clear)
                 )
                 .overlay(
                     Rectangle()
-                        .stroke(isRemoteDropTargeted ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear, lineWidth: 2)
+                        .stroke(isRemoteDropTargeted ? Color.flashbrowseAccent : Color.clear, lineWidth: 2)
                 )
                 .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isRemoteDropTargeted) { providers in
                     handleRemoteDrop(providers: providers)
@@ -355,7 +355,7 @@ public struct RemoteBrowserView: View {
                         
                         HStack(spacing: 8) {
                             Image(systemName: item.sfSymbolName)
-                                .foregroundColor(item.isDirectory ? Color(red: 0.91, green: 0.33, blue: 0.13) : .primary)
+                                .foregroundColor(item.isDirectory ? Color.flashbrowseAccent : .primary)
                                 .font(.system(size: 13))
                                 .frame(width: 18)
                             
@@ -384,8 +384,8 @@ public struct RemoteBrowserView: View {
                         .background(
                             RoundedRectangle(cornerRadius: 5)
                                 .fill(isSelected
-                                      ? Color(red: 0.91, green: 0.33, blue: 0.13)
-                                      : (isHovered ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.12) : Color.clear))
+                                      ? Color.flashbrowseAccent
+                                      : (isHovered ? Color.flashbrowseAccent.opacity(0.12) : Color.clear))
                         )
                         .contentShape(Rectangle())
                         .onDrag {

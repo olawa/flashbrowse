@@ -185,7 +185,7 @@ public class SSHService: ObservableObject {
         self.isLoading = true
         self.errorMessage = nil
         
-        let script = "cd \(path) && pwd && ls -la"
+        let script = "cd \(path.shellEscaped) && pwd && ls -la"
         do {
             let output = try await runSSHCommand(host: host, command: script)
             parseRemoteLsOutput(output: output, basePath: path)
@@ -248,39 +248,41 @@ public class SSHService: ObservableObject {
     // MARK: - SSH Command Execution
     public func runSSHCommand(host: SSHHost, command: String) async throws -> String {
         return try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            let pipe = Pipe()
-            let errPipe = Pipe()
-            
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-            
-            var args = [
-                "-o", "BatchMode=yes",
-                "-o", "ConnectTimeout=8",
-                "-o", "StrictHostKeyChecking=accept-new"
-            ]
-            args.append(contentsOf: host.sshCommandArgs)
-            args.append(command)
-            
-            process.arguments = args
-            process.standardOutput = pipe
-            process.standardError = errPipe
-            
-            do {
-                try process.run()
-                process.waitUntilExit()
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                let pipe = Pipe()
+                let errPipe = Pipe()
                 
-                if process.terminationStatus == 0 {
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    let str = String(data: data, encoding: .utf8) ?? ""
-                    continuation.resume(returning: str)
-                } else {
-                    let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-                    let errStr = String(data: errData, encoding: .utf8) ?? "Exit code \(process.terminationStatus)"
-                    continuation.resume(throwing: NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: errStr]))
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+                
+                var args = [
+                    "-o", "BatchMode=yes",
+                    "-o", "ConnectTimeout=8",
+                    "-o", "StrictHostKeyChecking=accept-new"
+                ]
+                args.append(contentsOf: host.sshCommandArgs)
+                args.append(command)
+                
+                process.arguments = args
+                process.standardOutput = pipe
+                process.standardError = errPipe
+                
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                    
+                    if process.terminationStatus == 0 {
+                        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                        let str = String(data: data, encoding: .utf8) ?? ""
+                        continuation.resume(returning: str)
+                    } else {
+                        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                        let errStr = String(data: errData, encoding: .utf8) ?? "Exit code \(process.terminationStatus)"
+                        continuation.resume(throwing: NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: errStr]))
+                    }
+                } catch {
+                    continuation.resume(throwing: error)
                 }
-            } catch {
-                continuation.resume(throwing: error)
             }
         }
     }
@@ -297,32 +299,41 @@ public class SSHService: ObservableObject {
         let safeName = item.name.replacingOccurrences(of: "/", with: "_")
         let localTarget = cacheDir.appendingPathComponent("\(host.alias)_\(safeName)")
         
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/scp")
-        
-        var args = [
-            "-o", "BatchMode=yes",
-            "-o", "ConnectTimeout=8"
-        ]
-        if host.port != 22 {
-            args.append(contentsOf: ["-P", "\(host.port)"])
-        }
-        if let key = host.identityFile, !key.isEmpty {
-            args.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath])
-        }
-        
-        let remoteSource = host.user.isEmpty ? "\(host.hostName):\(item.remotePath)" : "\(host.user)@\(host.hostName):\(item.remotePath)"
-        args.append(remoteSource)
-        args.append(localTarget.path)
-        
-        process.arguments = args
-        try process.run()
-        process.waitUntilExit()
-        
-        if process.terminationStatus == 0 {
-            return localTarget
-        } else {
-            throw NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Failed to download preview"])
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/scp")
+                
+                var args = [
+                    "-o", "BatchMode=yes",
+                    "-o", "ConnectTimeout=8"
+                ]
+                if host.port != 22 {
+                    args.append(contentsOf: ["-P", "\(host.port)"])
+                }
+                if let key = host.identityFile, !key.isEmpty {
+                    args.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath])
+                }
+                
+                let remoteSource = host.user.isEmpty ? "\(host.hostName):\(item.remotePath)" : "\(host.user)@\(host.hostName):\(item.remotePath)"
+                args.append(remoteSource)
+                args.append(localTarget.path)
+                
+                process.arguments = args
+                
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                    
+                    if process.terminationStatus == 0 {
+                        continuation.resume(returning: localTarget)
+                    } else {
+                        continuation.resume(throwing: NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Failed to download preview"]))
+                    }
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
     }
     
@@ -331,27 +342,39 @@ public class SSHService: ObservableObject {
         guard let host = activeHost else { return }
         
         let localTarget = destinationFolder.appendingPathComponent(item.name)
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/scp")
         
-        var args = ["-r", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
-        if host.port != 22 {
-            args.append(contentsOf: ["-P", "\(host.port)"])
-        }
-        if let key = host.identityFile, !key.isEmpty {
-            args.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath])
-        }
-        
-        let remoteSource = host.user.isEmpty ? "\(host.hostName):\(item.remotePath)" : "\(host.user)@\(host.hostName):\(item.remotePath)"
-        args.append(remoteSource)
-        args.append(localTarget.path)
-        
-        process.arguments = args
-        try process.run()
-        process.waitUntilExit()
-        
-        if process.terminationStatus != 0 {
-            throw NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Download failed"])
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/scp")
+                
+                var args = ["-r", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+                if host.port != 22 {
+                    args.append(contentsOf: ["-P", "\(host.port)"])
+                }
+                if let key = host.identityFile, !key.isEmpty {
+                    args.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath])
+                }
+                
+                let remoteSource = host.user.isEmpty ? "\(host.hostName):\(item.remotePath)" : "\(host.user)@\(host.hostName):\(item.remotePath)"
+                args.append(remoteSource)
+                args.append(localTarget.path)
+                
+                process.arguments = args
+                
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                    
+                    if process.terminationStatus != 0 {
+                        continuation.resume(throwing: NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Download failed"]))
+                    } else {
+                        continuation.resume(returning: ())
+                    }
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
     }
     
@@ -359,29 +382,40 @@ public class SSHService: ObservableObject {
     public func uploadFile(localURL: URL, to remoteDirectory: String) async throws {
         guard let host = activeHost else { return }
         
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/scp")
-        
-        var args = ["-r", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
-        if host.port != 22 {
-            args.append(contentsOf: ["-P", "\(host.port)"])
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/scp")
+                
+                var args = ["-r", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+                if host.port != 22 {
+                    args.append(contentsOf: ["-P", "\(host.port)"])
+                }
+                if let key = host.identityFile, !key.isEmpty {
+                    args.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath])
+                }
+                
+                args.append(localURL.path)
+                let remoteDest = host.user.isEmpty ? "\(host.hostName):\(remoteDirectory)/" : "\(host.user)@\(host.hostName):\(remoteDirectory)/"
+                args.append(remoteDest)
+                
+                process.arguments = args
+                
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                    
+                    if process.terminationStatus == 0 {
+                        continuation.resume()
+                    } else {
+                        continuation.resume(throwing: NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Upload failed"]))
+                    }
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
-        if let key = host.identityFile, !key.isEmpty {
-            args.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath])
-        }
         
-        args.append(localURL.path)
-        let remoteDest = host.user.isEmpty ? "\(host.hostName):\(remoteDirectory)/" : "\(host.user)@\(host.hostName):\(remoteDirectory)/"
-        args.append(remoteDest)
-        
-        process.arguments = args
-        try process.run()
-        process.waitUntilExit()
-        
-        if process.terminationStatus == 0 {
-            await listRemoteDirectory(path: remoteDirectory)
-        } else {
-            throw NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Upload failed"])
-        }
+        await listRemoteDirectory(path: remoteDirectory)
     }
 }

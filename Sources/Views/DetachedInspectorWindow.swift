@@ -70,6 +70,8 @@ public struct WebViewRenderer: NSViewRepresentable {
     
     public class Coordinator {
         var lastPulse: Int = -1
+        var lastLoadedURL: URL?
+        var lastLoadedHTML: String?
     }
     
     public func makeNSView(context: Context) -> WKWebView {
@@ -89,9 +91,17 @@ public struct WebViewRenderer: NSViewRepresentable {
         }
         
         if let html = htmlContent {
-            webView.loadHTMLString(html, baseURL: baseURL ?? url?.deletingLastPathComponent())
+            if context.coordinator.lastLoadedHTML != html {
+                context.coordinator.lastLoadedHTML = html
+                context.coordinator.lastLoadedURL = nil
+                webView.loadHTMLString(html, baseURL: baseURL ?? url?.deletingLastPathComponent())
+            }
         } else if let fileURL = url {
-            webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+            if context.coordinator.lastLoadedURL != fileURL {
+                context.coordinator.lastLoadedURL = fileURL
+                context.coordinator.lastLoadedHTML = nil
+                webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+            }
         }
     }
 }
@@ -235,7 +245,7 @@ public struct InspectorView: View {
             // Header Bar
             HStack(spacing: 8) {
                 Image(systemName: "display.2")
-                    .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                    .foregroundColor(Color.flashbrowseAccent)
                     .font(.system(size: 14))
                 
                 Text(state.metadata?.name ?? "No Selection")
@@ -403,7 +413,7 @@ public struct InspectorView: View {
             VStack(spacing: 12) {
                 Image(systemName: "folder.fill")
                     .font(.system(size: 64))
-                    .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                    .foregroundColor(Color.flashbrowseAccent)
                 Text(meta.name)
                     .font(.system(size: 16, weight: .bold))
                 Text("Folder")
@@ -476,7 +486,7 @@ public struct InspectorView: View {
                             ForEach(Array(row.enumerated()), id: \.offset) { colIdx, cell in
                                 Text(cell)
                                     .font(.system(size: 11, weight: isHeader ? .bold : .regular, design: .monospaced))
-                                    .foregroundColor(isHeader ? (isDarkTheme ? .cyan : Color(red: 0.91, green: 0.33, blue: 0.13)) : (isDarkTheme ? .white : .primary))
+                                    .foregroundColor(isHeader ? (isDarkTheme ? .cyan : Color.flashbrowseAccent) : (isDarkTheme ? .white : .primary))
                                     .lineLimit(1)
                                     .frame(minWidth: 100, maxWidth: 300, alignment: .leading)
                                     .padding(.horizontal, 8)

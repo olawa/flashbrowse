@@ -116,7 +116,7 @@ public struct DualPaneContainerView: View {
         .background(isCommanderMode ? Color(red: 0.0, green: 0.11, blue: 0.22) : Color(nsColor: .windowBackgroundColor))
         .overlay(
             RoundedRectangle(cornerRadius: 0)
-                .stroke(isFocused && isDualPane ? (isCommanderMode ? Color.cyan : Color(red: 0.91, green: 0.33, blue: 0.13)) : Color.clear, lineWidth: 2)
+                .stroke(isFocused && isDualPane ? (isCommanderMode ? Color.cyan : Color.flashbrowseAccent) : Color.clear, lineWidth: 2)
         )
         .onTapGesture {
             onSelect()
@@ -193,7 +193,10 @@ public struct DualPaneContainerView: View {
         guard !targets.isEmpty else { return }
         
         let destination = inactiveState.currentDirectory
-        FileSystemService.shared.copyItems(urls: targets, to: destination)
+        let errors = FileSystemService.shared.copyItems(urls: targets, to: destination)
+        if !errors.isEmpty {
+            activeState.showToast("⚠️ \(errors.first!)")
+        }
         inactiveState.reload()
     }
     
@@ -202,7 +205,10 @@ public struct DualPaneContainerView: View {
         guard !targets.isEmpty else { return }
         
         let destination = inactiveState.currentDirectory
-        FileSystemService.shared.moveItems(urls: targets, to: destination)
+        let errors = FileSystemService.shared.moveItems(urls: targets, to: destination)
+        if !errors.isEmpty {
+            activeState.showToast("⚠️ \(errors.first!)")
+        }
         activeState.reload()
         inactiveState.reload()
     }
@@ -211,7 +217,10 @@ public struct DualPaneContainerView: View {
         let targets = Array(activeState.selectedURLs)
         guard !targets.isEmpty else { return }
         
-        FileSystemService.shared.moveToTrash(urls: targets)
+        let errors = FileSystemService.shared.moveToTrash(urls: targets)
+        if !errors.isEmpty {
+            activeState.showToast("⚠️ \(errors.first!)")
+        }
         activeState.reload()
     }
 }

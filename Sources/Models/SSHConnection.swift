@@ -1,6 +1,6 @@
 import Foundation
 
-public struct SSHHost: Identifiable, Codable, Hashable {
+public struct SSHHost: Identifiable, Codable, Hashable, Sendable {
     public var id: String { alias }
     public let alias: String
     public let hostName: String
@@ -46,7 +46,7 @@ public struct SSHHost: Identifiable, Codable, Hashable {
     }
 }
 
-public struct RemoteFileItem: Identifiable, Hashable {
+public struct RemoteFileItem: Identifiable, Hashable, Sendable {
     public var id: String { remotePath }
     public let name: String
     public let remotePath: String
@@ -71,13 +71,17 @@ public struct RemoteFileItem: Identifiable, Hashable {
         self.modifiedString = modifiedString
     }
     
+    private static let byteFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.countStyle = .file
+        return f
+    }()
+    
     public var formattedSize: String {
         if isDirectory {
             return "--"
         }
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: sizeBytes)
+        return Self.byteFormatter.string(fromByteCount: sizeBytes)
     }
     
     public var sfSymbolName: String {

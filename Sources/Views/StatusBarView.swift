@@ -13,11 +13,11 @@ public struct StatusBarView: View {
             if let toast = state.toastMessage {
                 HStack(spacing: 4) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                        .foregroundColor(Color.flashbrowseAccent)
                         .font(.system(size: 11))
                     Text(toast)
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                        .foregroundColor(Color.flashbrowseAccent)
                 }
                 .transition(.opacity)
             } else {

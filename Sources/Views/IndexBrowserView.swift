@@ -181,7 +181,7 @@ public struct IndexBrowserView: View {
                         }) {
                             HStack(spacing: 6) {
                                 Image(systemName: "folder.fill")
-                                    .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                                    .foregroundColor(Color.flashbrowseAccent)
                                     .font(.system(size: 13))
                                 
                                 VStack(alignment: .leading, spacing: 1) {
@@ -210,7 +210,7 @@ public struct IndexBrowserView: View {
                             .padding(.vertical, 5)
                             .background(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(isSelected ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+                                    .fill(isSelected ? Color.flashbrowseAccent : Color.clear)
                             )
                             .contentShape(Rectangle())
                         }
@@ -293,7 +293,7 @@ public struct IndexBrowserView: View {
                         .padding(.vertical, 5)
                         .background(
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(isHovered ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.12) : Color.clear)
+                                .fill(isHovered ? Color.flashbrowseAccent.opacity(0.12) : Color.clear)
                         )
                         .contentShape(Rectangle())
                         // Instant Hover + Debounced Inspector

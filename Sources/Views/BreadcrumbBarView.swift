@@ -52,7 +52,7 @@ public struct BreadcrumbBarView: View {
                 if state.isEditingPath {
                     HStack {
                         Image(systemName: "folder.fill")
-                            .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                            .foregroundColor(Color.flashbrowseAccent)
                         TextField("Enter path (e.g. ~/dev or /tmp)", text: $state.pathInputText)
                             .textFieldStyle(.plain)
                             .focused($isPathFieldFocused)
@@ -75,7 +75,7 @@ public struct BreadcrumbBarView: View {
                     .cornerRadius(6)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color(red: 0.91, green: 0.33, blue: 0.13), lineWidth: 1.5)
+                            .stroke(Color.flashbrowseAccent, lineWidth: 1.5)
                     )
                     .onAppear {
                         isPathFieldFocused = true
@@ -96,7 +96,7 @@ public struct BreadcrumbBarView: View {
                                         } else {
                                             Image(systemName: "folder.fill")
                                                 .font(.system(size: 11))
-                                                .foregroundColor(isCurrent ? .white : Color(red: 0.91, green: 0.33, blue: 0.13))
+                                                .foregroundColor(isCurrent ? .white : Color.flashbrowseAccent)
                                         }
                                         
                                         Text(crumb.name.isEmpty ? "/" : crumb.name)
@@ -106,7 +106,7 @@ public struct BreadcrumbBarView: View {
                                     .padding(.vertical, 4)
                                     .background(
                                         isCurrent
-                                        ? Color(red: 0.91, green: 0.33, blue: 0.13)
+                                        ? Color.flashbrowseAccent
                                         : Color(nsColor: .controlBackgroundColor).opacity(0.8)
                                     )
                                     .foregroundColor(isCurrent ? .white : .primary)
@@ -180,7 +180,7 @@ public struct BreadcrumbBarView: View {
                         .font(.system(size: 10, weight: .bold))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
-                        .background(state.searchScope == .includeSubfolders ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+                        .background(state.searchScope == .includeSubfolders ? Color.flashbrowseAccent : Color.clear)
                         .foregroundColor(state.searchScope == .includeSubfolders ? .white : .secondary)
                         .cornerRadius(3)
                 }
@@ -212,7 +212,7 @@ public struct BreadcrumbBarView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .padding(.horizontal, 7)
                         .frame(height: 26)
-                        .background(state.viewMode == .list ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+                        .background(state.viewMode == .list ? Color.flashbrowseAccent : Color.clear)
                         .foregroundColor(state.viewMode == .list ? .white : .primary)
                 }
                 .buttonStyle(.plain)
@@ -222,7 +222,7 @@ public struct BreadcrumbBarView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .padding(.horizontal, 7)
                         .frame(height: 26)
-                        .background(state.viewMode == .grid ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+                        .background(state.viewMode == .grid ? Color.flashbrowseAccent : Color.clear)
                         .foregroundColor(state.viewMode == .grid ? .white : .primary)
                 }
                 .buttonStyle(.plain)

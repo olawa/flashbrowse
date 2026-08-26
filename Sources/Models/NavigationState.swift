@@ -226,9 +226,13 @@ public class NavigationState: ObservableObject {
         
         // 3. Check for File URLs copied in Finder / Flashbrowse
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
-            FileSystemService.shared.copyItems(urls: urls, to: currentDirectory)
+            let errors = FileSystemService.shared.copyItems(urls: urls, to: currentDirectory)
             reload()
-            showToast("📋 Copied \(urls.count) file(s)")
+            if errors.isEmpty {
+                showToast("📋 Copied \(urls.count) file(s)")
+            } else {
+                showToast("⚠️ \(errors.first!)")
+            }
         }
     }
     
@@ -325,7 +329,42 @@ public class NavigationState: ObservableObject {
         }
     }
     
-    public var lastNavigationTime: Date = Date.distantPast
+    private var lastNavigationTime: Date = Date.distantPast
+    
+    // MARK: - Rename Item
+    @Published public var renamingURL: URL?
+    @Published public var renameText: String = ""
+    
+    public func startRename(url: URL) {
+        self.renamingURL = url
+        self.renameText = url.lastPathComponent
+    }
+    
+    public func commitRename() -> String? {
+        guard let url = renamingURL else { return nil }
+        let newName = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newName.isEmpty, newName != url.lastPathComponent else {
+            cancelRename()
+            return nil
+        }
+        
+        let newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
+        do {
+            try FileManager.default.moveItem(at: url, to: newURL)
+            cancelRename()
+            reload()
+            selectedURLs = [newURL]
+            return nil
+        } catch {
+            cancelRename()
+            return "Rename failed: \(error.localizedDescription)"
+        }
+    }
+    
+    public func cancelRename() {
+        renamingURL = nil
+        renameText = ""
+    }
     
     public func openItem(_ item: FileItem) {
         let now = Date()

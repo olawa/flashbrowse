@@ -105,7 +105,7 @@ public struct BatchRenameView: View {
             // Header
             HStack {
                 Image(systemName: "pencil.and.list.clipboard")
-                    .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                    .foregroundColor(Color.flashbrowseAccent)
                     .font(.system(size: 16))
                 Text("Batch Rename (\(items.count) items)")
                     .font(.system(size: 14, weight: .bold))
@@ -245,7 +245,7 @@ public struct BatchRenameView: View {
                                 
                                 Image(systemName: "arrow.right")
                                     .font(.system(size: 10))
-                                    .foregroundColor(item.isChanged ? Color(red: 0.91, green: 0.33, blue: 0.13) : .secondary.opacity(0.4))
+                                    .foregroundColor(item.isChanged ? Color.flashbrowseAccent : .secondary.opacity(0.4))
                                     .frame(width: 30)
                                 
                                 HStack(spacing: 6) {
@@ -259,8 +259,8 @@ public struct BatchRenameView: View {
                                             .font(.system(size: 9, weight: .bold))
                                             .padding(.horizontal, 4)
                                             .padding(.vertical, 1)
-                                            .background(Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.15))
-                                            .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                                            .background(Color.flashbrowseAccent.opacity(0.15))
+                                            .foregroundColor(Color.flashbrowseAccent)
                                             .cornerRadius(3)
                                     }
                                 }
@@ -268,7 +268,7 @@ public struct BatchRenameView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 4)
-                            .background(item.isChanged ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.06) : Color.clear)
+                            .background(item.isChanged ? Color.flashbrowseAccent.opacity(0.06) : Color.clear)
                         }
                     }
                     .padding(.vertical, 4)
@@ -295,7 +295,7 @@ public struct BatchRenameView: View {
                     executeRename()
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color(red: 0.91, green: 0.33, blue: 0.13))
+                .tint(Color.flashbrowseAccent)
                 .disabled(changeCount == 0)
                 .keyboardShortcut(.defaultAction)
             }

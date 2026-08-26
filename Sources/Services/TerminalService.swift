@@ -2,12 +2,19 @@ import Foundation
 import Combine
 
 public struct TerminalOutputLine: Identifiable, Hashable {
-    public let id = UUID()
+    private static var nextId: Int = 0
+    private static func makeId() -> Int {
+        nextId += 1
+        return nextId
+    }
+    
+    public let id: Int
     public let text: String
     public let isError: Bool
     public let isPrompt: Bool
     
     public init(text: String, isError: Bool = false, isPrompt: Bool = false) {
+        self.id = Self.makeId()
         self.text = text
         self.isError = isError
         self.isPrompt = isPrompt
@@ -245,7 +252,7 @@ public class TerminalService: ObservableObject {
         
         runSubprocess(
             executableURL: URL(fileURLWithPath: "/bin/zsh"),
-            arguments: ["-c", "cd '\(workingDirectory.path)' && \(trimmed)"],
+            arguments: ["-c", "cd \(workingDirectory.path.shellEscaped) && \(trimmed)"],
             environment: ProcessInfo.processInfo.environment,
             isRight: false
         )
@@ -282,7 +289,7 @@ public class TerminalService: ObservableObject {
         
         runSubprocess(
             executableURL: URL(fileURLWithPath: "/bin/zsh"),
-            arguments: ["-c", "cd '\(rightWorkingDirectory.path)' && \(trimmed)"],
+            arguments: ["-c", "cd \(rightWorkingDirectory.path.shellEscaped) && \(trimmed)"],
             environment: ProcessInfo.processInfo.environment,
             isRight: true
         )
@@ -352,7 +359,7 @@ public class TerminalService: ObservableObject {
         if host.port != 22 { sshArgs.append(contentsOf: ["-p", "\(host.port)"]) }
         if let key = host.identityFile, !key.isEmpty { sshArgs.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath]) }
         sshArgs.append(target)
-        sshArgs.append("cd \(remoteWorkingDir) && \(trimmed)")
+        sshArgs.append("cd \(remoteWorkingDir.shellEscaped) && \(trimmed)")
         
         runSubprocess(
             executableURL: URL(fileURLWithPath: "/usr/bin/ssh"),
@@ -390,7 +397,7 @@ public class TerminalService: ObservableObject {
         if host.port != 22 { sshArgs.append(contentsOf: ["-p", "\(host.port)"]) }
         if let key = host.identityFile, !key.isEmpty { sshArgs.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath]) }
         sshArgs.append(target)
-        sshArgs.append("cd \(remoteWorkingDir) && \(trimmed)")
+        sshArgs.append("cd \(remoteWorkingDir.shellEscaped) && \(trimmed)")
         
         runSubprocess(
             executableURL: URL(fileURLWithPath: "/usr/bin/ssh"),

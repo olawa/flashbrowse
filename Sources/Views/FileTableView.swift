@@ -6,6 +6,9 @@ public struct FileTableView: View {
     @FocusState private var isListFocused: Bool
     @State private var hoveredURL: URL?
     @GestureState private var pinchScale: CGFloat = 1.0
+    @State private var showingDeleteConfirmation: Bool = false
+    @State private var pendingDeleteURLs: [URL] = []
+    @FocusState private var isRenameFieldFocused: Bool
     
     public init(state: NavigationState) {
         self.state = state
@@ -62,9 +65,12 @@ public struct FileTableView: View {
             return .ignored
         }
         .onKeyPress(.return) {
-            if let selectedURL = state.selectedURLs.first,
-               let item = state.filteredItems.first(where: { $0.url == selectedURL }) {
-                state.openItem(item)
+            // Enter = rename selected file (if not renaming, start rename)
+            if state.renamingURL != nil {
+                return .ignored // Let TextField handle it
+            }
+            if let selectedURL = state.selectedURLs.first {
+                state.startRename(url: selectedURL)
                 return .handled
             }
             return .ignored
@@ -80,11 +86,26 @@ public struct FileTableView: View {
         .onKeyPress(.delete) {
             let urlsToDelete = Array(state.selectedURLs)
             if !urlsToDelete.isEmpty {
-                FileSystemService.shared.moveToTrash(urls: urlsToDelete)
-                state.reload()
+                pendingDeleteURLs = urlsToDelete
+                showingDeleteConfirmation = true
                 return .handled
             }
             return .ignored
+        }
+        .alert("Flytta till papperskorgen?", isPresented: $showingDeleteConfirmation) {
+            Button("Avbryt", role: .cancel) {
+                pendingDeleteURLs = []
+            }
+            Button("Radera", role: .destructive) {
+                let errors = FileSystemService.shared.moveToTrash(urls: pendingDeleteURLs)
+                if !errors.isEmpty {
+                    state.showToast("⚠️ \(errors.first!)")
+                }
+                state.reload()
+                pendingDeleteURLs = []
+            }
+        } message: {
+            Text("Vill du flytta \(pendingDeleteURLs.count) objekt till papperskorgen?")
         }
     }
     
@@ -133,12 +154,12 @@ public struct FileTableView: View {
             HStack(spacing: 4) {
                 Text(title)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(state.sortField == field ? Color(red: 0.91, green: 0.33, blue: 0.13) : .secondary)
+                    .foregroundColor(state.sortField == field ? Color.flashbrowseAccent : .secondary)
                 
                 if state.sortField == field {
                     Image(systemName: state.sortAscending ? "chevron.up" : "chevron.down")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                        .foregroundColor(Color.flashbrowseAccent)
                 }
                 
                 if alignment == .leading && width == nil {
@@ -163,7 +184,7 @@ public struct FileTableView: View {
                     if item.isDirectory {
                         Image(systemName: "folder.fill")
                             .font(.system(size: 16))
-                            .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13)) // Ubuntu Orange
+                            .foregroundColor(Color.flashbrowseAccent) // Ubuntu Orange
                     } else {
                         Image(systemName: item.sfSymbolName)
                             .font(.system(size: 15))
@@ -172,10 +193,34 @@ public struct FileTableView: View {
                 }
                 .frame(width: 22, height: 22)
                 
-                Text(item.name)
-                    .font(.system(size: 13, weight: item.isDirectory ? .medium : .regular))
-                    .foregroundColor(isSelected ? .white : (item.isHidden ? .secondary : .primary))
-                    .lineLimit(1)
+                if state.renamingURL == item.url {
+                    TextField("", text: $state.renameText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13, weight: .medium))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .cornerRadius(3)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 3)
+                                .stroke(Color.flashbrowseAccent, lineWidth: 1)
+                        )
+                        .focused($isRenameFieldFocused)
+                        .onAppear { isRenameFieldFocused = true }
+                        .onSubmit {
+                            if let err = state.commitRename() {
+                                state.showToast(err)
+                            }
+                        }
+                        .onExitCommand {
+                            state.cancelRename()
+                        }
+                } else {
+                    Text(item.name)
+                        .font(.system(size: 13, weight: item.isDirectory ? .medium : .regular))
+                        .foregroundColor(isSelected ? .white : (item.isHidden ? .secondary : .primary))
+                        .lineLimit(1)
+                }
                 
                 if item.isSymlink {
                     Image(systemName: "arrow.up.right")
@@ -196,7 +241,7 @@ public struct FileTableView: View {
                         .fill(
                             isSelected
                             ? Color.white.opacity(0.3)
-                            : (isGigabyte ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.25) : Color.cyan.opacity(0.18))
+                            : (isGigabyte ? Color.flashbrowseAccent.opacity(0.25) : Color.cyan.opacity(0.18))
                         )
                         .frame(width: 90 * proportion, height: 18)
                 }
@@ -228,8 +273,8 @@ public struct FileTableView: View {
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected
-                      ? Color(red: 0.91, green: 0.33, blue: 0.13)
-                      : (isHovered ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.12) : Color.clear))
+                      ? Color.flashbrowseAccent
+                      : (isHovered ? Color.flashbrowseAccent.opacity(0.12) : Color.clear))
         )
         .contentShape(Rectangle())
         // Drag & Drop to Sidebar
@@ -290,7 +335,7 @@ public struct FileTableView: View {
                 if item.isDirectory {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 46))
-                        .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                        .foregroundColor(Color.flashbrowseAccent)
                 } else {
                     Image(systemName: item.sfSymbolName)
                         .font(.system(size: 40))
@@ -313,27 +358,53 @@ public struct FileTableView: View {
             }
             .frame(height: 52)
             
-            Text(item.name)
-                .font(.system(size: 12, weight: item.isDirectory ? .medium : .regular))
-                .foregroundColor(isSelected ? .white : (item.isHidden ? .secondary : .primary))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity)
+            if state.renamingURL == item.url {
+                TextField("", text: $state.renameText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, weight: .medium))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .cornerRadius(3)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(Color.flashbrowseAccent, lineWidth: 1)
+                    )
+                    .focused($isRenameFieldFocused)
+                    .onAppear { isRenameFieldFocused = true }
+                    .onSubmit {
+                        if let err = state.commitRename() {
+                            state.showToast(err)
+                        }
+                    }
+                    .onExitCommand {
+                        state.cancelRename()
+                    }
+                    .frame(maxWidth: .infinity)
+            } else {
+                Text(item.name)
+                    .font(.system(size: 12, weight: item.isDirectory ? .medium : .regular))
+                    .foregroundColor(isSelected ? .white : (item.isHidden ? .secondary : .primary))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 6)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(isSelected
-                      ? Color(red: 0.91, green: 0.33, blue: 0.13)
+                      ? Color.flashbrowseAccent
                       : (isHovered
-                         ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.15)
+                         ? Color.flashbrowseAccent.opacity(0.15)
                          : (item.isDirectory ? Color(nsColor: .controlBackgroundColor).opacity(0.5) : Color.clear)))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color.clear : (isHovered ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.5) : Color(nsColor: .separatorColor).opacity(0.3)), lineWidth: 1)
+                .stroke(isSelected ? Color.clear : (isHovered ? Color.flashbrowseAccent.opacity(0.5) : Color(nsColor: .separatorColor).opacity(0.3)), lineWidth: 1)
         )
         .contentShape(Rectangle())
         // Drag & Drop to Sidebar
@@ -456,8 +527,17 @@ public struct FileTableView: View {
         
         Divider()
         
+        Button(action: {
+            state.startRename(url: item.url)
+        }) {
+            Label("Rename (Enter / F2)", systemImage: "pencil")
+        }
+        
         Button(role: .destructive, action: {
-            FileSystemService.shared.moveToTrash(urls: targets)
+            let errors = FileSystemService.shared.moveToTrash(urls: targets)
+            if !errors.isEmpty {
+                state.showToast("⚠️ \(errors.first!)")
+            }
             state.reload()
         }) {
             Label("Move to Trash", systemImage: "trash")

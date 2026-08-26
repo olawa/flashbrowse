@@ -138,7 +138,7 @@ public struct MainWindowView: View {
                                 .font(.system(size: 11, weight: .bold))
                         }
                     }
-                    .foregroundColor(terminalService.isOpen ? Color(red: 0.91, green: 0.33, blue: 0.13) : .primary)
+                    .foregroundColor(terminalService.isOpen ? Color.flashbrowseAccent : .primary)
                 }
                 .help("Toggle & Focus Integrated Terminal (Cmd+J)")
                 
@@ -148,7 +148,7 @@ public struct MainWindowView: View {
                         isDualPane.toggle()
                     }) {
                         Image(systemName: isDualPane ? "square.split.2x1.fill" : "square.split.2x1")
-                            .foregroundColor(isDualPane ? Color(red: 0.91, green: 0.33, blue: 0.13) : .primary)
+                            .foregroundColor(isDualPane ? Color.flashbrowseAccent : .primary)
                     }
                     .help("Toggle Dual-Pane Split View (Cmd+D / F3)")
                     
@@ -207,6 +207,16 @@ public struct MainWindowView: View {
         }
         .onChange(of: activePane) {
             updateTerminalCallback()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .flashbrowseSwitchWorkspace)) { notif in
+            if let id = notif.object as? Int {
+                applyWorkspacePreset(id: id)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .flashbrowseSaveWorkspace)) { notif in
+            if let id = notif.object as? Int {
+                saveWorkspacePreset(id: id)
+            }
         }
     }
     

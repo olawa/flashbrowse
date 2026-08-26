@@ -52,7 +52,7 @@ public struct SidebarView: View {
             // Flashbrowse Header Branding
             HStack(spacing: 6) {
                 Image(systemName: "bolt.horizontal.fill")
-                    .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                    .foregroundColor(Color.flashbrowseAccent)
                     .font(.system(size: 14))
                 Text("Flashbrowse")
                     .font(.system(size: 13, weight: .bold))
@@ -107,7 +107,7 @@ public struct SidebarView: View {
                                     Text("Add SSH Host")
                                 }
                                 .font(.system(size: 11))
-                                .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                                .foregroundColor(Color.flashbrowseAccent)
                                 .padding(.vertical, 4)
                                 .padding(.horizontal, 10)
                             }
@@ -180,11 +180,11 @@ public struct SidebarView: View {
                     .padding(4)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(isDropTargeted ? Color(red: 0.91, green: 0.33, blue: 0.13).opacity(0.15) : Color.clear)
+                            .fill(isDropTargeted ? Color.flashbrowseAccent.opacity(0.15) : Color.clear)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(isDropTargeted ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear, lineWidth: 1.5)
+                            .stroke(isDropTargeted ? Color.flashbrowseAccent : Color.clear, lineWidth: 1.5)
                     )
                     .onDrop(of: [UTType.fileURL.identifier, UTType.utf8PlainText.identifier], isTargeted: $isDropTargeted) { providers in
                         handleDrop(providers: providers)
@@ -250,7 +250,7 @@ public struct SidebarView: View {
             .padding(.horizontal, 8)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isConnected ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+                    .fill(isConnected ? Color.flashbrowseAccent : Color.clear)
             )
             .foregroundColor(isConnected ? .white : .primary)
         }
@@ -330,7 +330,7 @@ public struct SidebarView: View {
         }) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .foregroundColor(isSelected ? .white : Color(red: 0.91, green: 0.33, blue: 0.13))
+                    .foregroundColor(isSelected ? .white : Color.flashbrowseAccent)
                     .font(.system(size: 13))
                     .frame(width: 18)
                 
@@ -343,7 +343,7 @@ public struct SidebarView: View {
             .padding(.horizontal, 8)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+                    .fill(isSelected ? Color.flashbrowseAccent : Color.clear)
             )
             .foregroundColor(isSelected ? .white : .primary)
         }
@@ -360,7 +360,7 @@ public struct SidebarView: View {
         }) {
             HStack(spacing: 8) {
                 Image(systemName: bookmark.icon)
-                    .foregroundColor(isSelected ? .white : Color(red: 0.91, green: 0.33, blue: 0.13))
+                    .foregroundColor(isSelected ? .white : Color.flashbrowseAccent)
                     .font(.system(size: 13))
                     .frame(width: 18)
                 
@@ -374,7 +374,7 @@ public struct SidebarView: View {
             .padding(.horizontal, 8)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color(red: 0.91, green: 0.33, blue: 0.13) : Color.clear)
+                    .fill(isSelected ? Color.flashbrowseAccent : Color.clear)
             )
             .foregroundColor(isSelected ? .white : .primary)
         }

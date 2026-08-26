@@ -17,7 +17,7 @@ public struct AddSSHHostView: View {
         VStack(spacing: 16) {
             HStack {
                 Image(systemName: "server.rack")
-                    .foregroundColor(Color(red: 0.91, green: 0.33, blue: 0.13))
+                    .foregroundColor(Color.flashbrowseAccent)
                     .font(.system(size: 16))
                 Text("Add SSH Connection")
                     .font(.headline)
@@ -90,7 +90,7 @@ public struct AddSSHHostView: View {
                     saveAndConnect()
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color(red: 0.91, green: 0.33, blue: 0.13))
+                .tint(Color.flashbrowseAccent)
                 .disabled(alias.trimmingCharacters(in: .whitespaces).isEmpty || hostName.trimmingCharacters(in: .whitespaces).isEmpty)
                 .keyboardShortcut(.defaultAction)
             }

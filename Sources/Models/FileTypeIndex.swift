@@ -21,7 +21,7 @@ public struct FileTypeIndex: Identifiable, Hashable {
             id: "bam",
             name: "BAM / SAM Alignments",
             icon: "dna",
-            color: Color(red: 0.91, green: 0.33, blue: 0.13), // Ubuntu Orange
+            color: Color.flashbrowseAccent, // Ubuntu Orange
             extensions: ["bam", "sam", "cram", "bai", "crai"]
         ),
         FileTypeIndex(
