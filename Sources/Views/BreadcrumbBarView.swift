@@ -259,8 +259,14 @@ public struct BreadcrumbBarView: View {
                 
                 Divider()
                 
-                Section("Behavior") {
-                    Toggle("Single Click to Open", isOn: $state.singleClickToOpen)
+                Section("Navigation & Clicks") {
+                    Picker("Click Mode", selection: $state.clickMode) {
+                        Text("📁 Folders Only (Safe)").tag(ClickOpenMode.foldersOnly)
+                        Text("⚡ All (Folders & Files)").tag(ClickOpenMode.always)
+                        Text("🖱️ Double Click All").tag(ClickOpenMode.doubleClick)
+                    }
+                    
+                    Toggle("Focus on Mouse Hover", isOn: $state.autoActivateOnHover)
                     Toggle("Hover to Select", isOn: $state.hoverToSelect)
                 }
                 

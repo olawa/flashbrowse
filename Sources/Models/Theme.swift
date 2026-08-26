@@ -30,4 +30,5 @@ public extension Notification.Name {
     static let flashbrowseSaveWorkspace = Notification.Name("flashbrowseSaveWorkspace")
     static let flashbrowseInspectorSelectedURL = Notification.Name("flashbrowseInspectorSelectedURL")
     static let flashbrowseReloadDirectory = Notification.Name("flashbrowseReloadDirectory")
+    static let flashbrowseHoverActivateChanged = Notification.Name("flashbrowseHoverActivateChanged")
 }

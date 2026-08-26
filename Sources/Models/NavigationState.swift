@@ -11,6 +11,14 @@ public enum SearchScope: String, CaseIterable, Identifiable {
     public var id: String { rawValue }
 }
 
+public enum ClickOpenMode: String, CaseIterable, Identifiable, Codable {
+    case foldersOnly = "Folders Only (Safe)"
+    case always = "Folders & Files"
+    case doubleClick = "Double Click All"
+    
+    public var id: String { rawValue }
+}
+
 public enum ViewMode: String, CaseIterable, Identifiable {
     case list = "List"
     case grid = "Grid"
@@ -105,7 +113,30 @@ public class NavigationState: ObservableObject {
     }
     
     // User Interaction Preferences
-    @Published public var singleClickToOpen: Bool = true
+    @Published public var clickMode: ClickOpenMode = {
+        if let raw = UserDefaults.standard.string(forKey: "flashbrowse_click_mode"),
+           let mode = ClickOpenMode(rawValue: raw) {
+            return mode
+        }
+        return .foldersOnly
+    }() {
+        didSet {
+            UserDefaults.standard.set(clickMode.rawValue, forKey: "flashbrowse_click_mode")
+        }
+    }
+    
+    public var singleClickToOpen: Bool {
+        get { clickMode != .doubleClick }
+        set { clickMode = newValue ? .foldersOnly : .doubleClick }
+    }
+    
+    @Published public var autoActivateOnHover: Bool = UserDefaults.standard.bool(forKey: "flashbrowse_hover_activate") {
+        didSet {
+            UserDefaults.standard.set(autoActivateOnHover, forKey: "flashbrowse_hover_activate")
+            NotificationCenter.default.post(name: .flashbrowseHoverActivateChanged, object: autoActivateOnHover)
+        }
+    }
+    
     @Published public var hoverToSelect: Bool = true
     
     // Custom User Bookmarks / Favorites (Persisted in UserDefaults)

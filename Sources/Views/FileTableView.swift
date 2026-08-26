@@ -295,15 +295,31 @@ public struct FileTableView: View {
         }
         // Single Click vs Double Click
         .onTapGesture {
-            if state.singleClickToOpen {
-                state.openItem(item)
-            } else {
+            let wasJustActivated = Date().timeIntervalSince(AppDelegate.lastWindowActivationTime) < 0.25
+            if wasJustActivated {
                 state.selectedURLs = [item.url]
+                state.lastSelectedURL = item.url
+                return
+            }
+            
+            switch state.clickMode {
+            case .foldersOnly:
+                if item.isDirectory {
+                    state.openItem(item)
+                } else {
+                    state.selectedURLs = [item.url]
+                    state.lastSelectedURL = item.url
+                }
+            case .always:
+                state.openItem(item)
+            case .doubleClick:
+                state.selectedURLs = [item.url]
+                state.lastSelectedURL = item.url
             }
         }
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
-                if !state.singleClickToOpen {
+                if state.clickMode == .doubleClick || (!item.isDirectory && state.clickMode == .foldersOnly) {
                     state.openItem(item)
                 }
             }
@@ -425,15 +441,31 @@ public struct FileTableView: View {
         }
         // Single Click vs Double Click
         .onTapGesture {
-            if state.singleClickToOpen {
-                state.openItem(item)
-            } else {
+            let wasJustActivated = Date().timeIntervalSince(AppDelegate.lastWindowActivationTime) < 0.25
+            if wasJustActivated {
                 state.selectedURLs = [item.url]
+                state.lastSelectedURL = item.url
+                return
+            }
+            
+            switch state.clickMode {
+            case .foldersOnly:
+                if item.isDirectory {
+                    state.openItem(item)
+                } else {
+                    state.selectedURLs = [item.url]
+                    state.lastSelectedURL = item.url
+                }
+            case .always:
+                state.openItem(item)
+            case .doubleClick:
+                state.selectedURLs = [item.url]
+                state.lastSelectedURL = item.url
             }
         }
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
-                if !state.singleClickToOpen {
+                if state.clickMode == .doubleClick || (!item.isDirectory && state.clickMode == .foldersOnly) {
                     state.openItem(item)
                 }
             }
