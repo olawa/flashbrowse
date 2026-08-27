@@ -83,8 +83,8 @@ public struct BreadcrumbBarView: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 3) {
-                            ForEach(state.breadcrumbs, id: \.url) { crumb in
-                                let isCurrent = crumb.url == state.currentDirectory
+                            ForEach(state.breadcrumbs) { crumb in
+                                let isCurrent = crumb.url.path == state.currentDirectory.path
                                 
                                 Button(action: {
                                     state.navigateTo(url: crumb.url)
@@ -114,7 +114,7 @@ public struct BreadcrumbBarView: View {
                                 }
                                 .buttonStyle(.plain)
                                 
-                                if crumb.url != state.currentDirectory {
+                                if crumb.url.path != state.currentDirectory.path {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 9, weight: .bold))
                                         .foregroundColor(.secondary.opacity(0.5))

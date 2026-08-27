@@ -101,3 +101,14 @@ public struct RemoteFileItem: Identifiable, Hashable, Sendable {
         }
     }
 }
+
+public struct RemoteBreadcrumb: Identifiable, Hashable, Sendable {
+    public var id: String { path }
+    public let name: String
+    public let path: String
+    
+    public init(name: String, path: String) {
+        self.name = name
+        self.path = path
+    }
+}

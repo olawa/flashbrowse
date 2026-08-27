@@ -173,8 +173,57 @@ public class SSHService: ObservableObject {
         }
     }
     
+    public var remoteBreadcrumbs: [RemoteBreadcrumb] {
+        var crumbs: [RemoteBreadcrumb] = []
+        let raw = currentRemotePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hostName = activeHost?.alias ?? "Remote"
+        
+        if raw == "~" || raw.isEmpty {
+            crumbs.append(RemoteBreadcrumb(name: "\(hostName) (~)", path: "~"))
+            return crumbs
+        }
+        
+        if raw.hasPrefix("/") {
+            crumbs.append(RemoteBreadcrumb(name: "\(hostName) (/)", path: "/"))
+            let components = raw.split(separator: "/").map(String.init)
+            var currentAccum = ""
+            for comp in components {
+                currentAccum += "/\(comp)"
+                crumbs.append(RemoteBreadcrumb(name: comp, path: currentAccum))
+            }
+        } else if raw.hasPrefix("~/") {
+            crumbs.append(RemoteBreadcrumb(name: "\(hostName) (~)", path: "~"))
+            let components = raw.dropFirst(2).split(separator: "/").map(String.init)
+            var currentAccum = "~"
+            for comp in components {
+                currentAccum += "/\(comp)"
+                crumbs.append(RemoteBreadcrumb(name: comp, path: currentAccum))
+            }
+        } else {
+            crumbs.append(RemoteBreadcrumb(name: raw, path: raw))
+        }
+        
+        return crumbs
+    }
+    
+    public static func escapeRemoteShellPath(_ path: String) -> String {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "~" || trimmed == "~/" {
+            return "~"
+        }
+        if trimmed.hasPrefix("~/") {
+            let rel = String(trimmed.dropFirst(2))
+            return "~/" + rel.shellEscaped
+        }
+        return trimmed.shellEscaped
+    }
+    
     public func goUp() {
-        if currentRemotePath == "/" || currentRemotePath == "~" { return }
+        if currentRemotePath == "/" { return }
+        if currentRemotePath == "~" {
+            navigateToRemote(path: "/")
+            return
+        }
         let parent = (currentRemotePath as NSString).deletingLastPathComponent
         navigateToRemote(path: parent.isEmpty ? "/" : parent)
     }
@@ -185,7 +234,8 @@ public class SSHService: ObservableObject {
         self.isLoading = true
         self.errorMessage = nil
         
-        let script = "cd \(path.shellEscaped) && pwd && ls -la"
+        let pathArg = Self.escapeRemoteShellPath(path)
+        let script = "cd \(pathArg) && pwd && ls -la"
         do {
             let output = try await runSSHCommand(host: host, command: script)
             parseRemoteLsOutput(output: output, basePath: path)

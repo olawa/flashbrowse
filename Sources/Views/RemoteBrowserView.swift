@@ -215,23 +215,65 @@ public struct RemoteBrowserView: View {
                             .background(Color(nsColor: .textBackgroundColor))
                             .cornerRadius(4)
                         } else {
-                            Button(action: {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 3) {
+                                    ForEach(sshService.remoteBreadcrumbs) { crumb in
+                                        let isCurrent = crumb.path == sshService.currentRemotePath
+                                        
+                                        Button(action: {
+                                            sshService.navigateToRemote(path: crumb.path)
+                                        }) {
+                                            HStack(spacing: 3) {
+                                                if crumb.path == "~" || crumb.path == "/" {
+                                                    Image(systemName: "server.rack")
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(isCurrent ? .white : Color.green)
+                                                } else {
+                                                    Image(systemName: "folder.fill")
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(isCurrent ? .white : Color.green)
+                                                }
+                                                Text(crumb.name)
+                                                    .font(.system(size: 11, weight: isCurrent ? .bold : .medium, design: .monospaced))
+                                            }
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(
+                                                isCurrent
+                                                ? Color.green
+                                                : Color(nsColor: .controlBackgroundColor).opacity(0.8)
+                                            )
+                                            .foregroundColor(isCurrent ? .white : .primary)
+                                            .cornerRadius(4)
+                                        }
+                                        .buttonStyle(.plain)
+                                        
+                                        if crumb.path != sshService.currentRemotePath {
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 8, weight: .bold))
+                                                .foregroundColor(.secondary.opacity(0.5))
+                                        }
+                                    }
+                                    
+                                    Button(action: {
+                                        remotePathInputText = sshService.currentRemotePath
+                                        isEditingRemotePath = true
+                                        isRemotePathFocused = true
+                                    }) {
+                                        Image(systemName: "pencil")
+                                            .font(.system(size: 9))
+                                            .foregroundColor(.secondary.opacity(0.6))
+                                            .padding(3)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Click or press Cmd+G to enter remote path directly")
+                                }
+                            }
+                            .onTapGesture(count: 2) {
                                 remotePathInputText = sshService.currentRemotePath
                                 isEditingRemotePath = true
                                 isRemotePathFocused = true
-                            }) {
-                                HStack(spacing: 4) {
-                                    Text("REMOTE: \(sshService.currentRemotePath)")
-                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                        .lineLimit(1)
-                                    
-                                    Image(systemName: "pencil")
-                                        .font(.system(size: 9))
-                                        .foregroundColor(.secondary.opacity(0.6))
-                                }
                             }
-                            .buttonStyle(.plain)
-                            .help("Click or press Cmd+G to jump to remote path")
                         }
                         
                         Spacer()

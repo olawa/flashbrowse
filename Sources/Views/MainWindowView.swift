@@ -27,7 +27,7 @@ public struct MainWindowView: View {
             } detail: {
                 VStack(spacing: 0) {
                     if sshService.isRemoteBrowserOpen {
-                        RemoteBrowserView(localState: currentActiveState)
+                        RemoteBrowserView(localState: leftState)
                     } else if indexService.activeIndex != nil {
                         IndexBrowserView(navState: currentActiveState)
                     } else {
@@ -202,6 +202,12 @@ public struct MainWindowView: View {
         }
         .onChange(of: activePane) {
             updateTerminalCallback()
+        }
+        .onChange(of: sshService.isRemoteBrowserOpen) {
+            if sshService.isRemoteBrowserOpen {
+                activePane = .left
+                leftState.reload()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .flashbrowseSwitchWorkspace)) { notif in
             if let id = notif.object as? Int {

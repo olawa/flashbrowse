@@ -359,7 +359,8 @@ public class TerminalService: ObservableObject {
         if host.port != 22 { sshArgs.append(contentsOf: ["-p", "\(host.port)"]) }
         if let key = host.identityFile, !key.isEmpty { sshArgs.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath]) }
         sshArgs.append(target)
-        sshArgs.append("cd \(remoteWorkingDir.shellEscaped) && \(trimmed)")
+        let remotePathArg = SSHService.escapeRemoteShellPath(remoteWorkingDir)
+        sshArgs.append("cd \(remotePathArg) && \(trimmed)")
         
         runSubprocess(
             executableURL: URL(fileURLWithPath: "/usr/bin/ssh"),
@@ -397,7 +398,8 @@ public class TerminalService: ObservableObject {
         if host.port != 22 { sshArgs.append(contentsOf: ["-p", "\(host.port)"]) }
         if let key = host.identityFile, !key.isEmpty { sshArgs.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath]) }
         sshArgs.append(target)
-        sshArgs.append("cd \(remoteWorkingDir.shellEscaped) && \(trimmed)")
+        let remotePathArg = SSHService.escapeRemoteShellPath(remoteWorkingDir)
+        sshArgs.append("cd \(remotePathArg) && \(trimmed)")
         
         runSubprocess(
             executableURL: URL(fileURLWithPath: "/usr/bin/ssh"),

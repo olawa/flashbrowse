@@ -50,6 +50,17 @@ public struct BookmarkItem: Identifiable, Codable, Hashable {
     }
 }
 
+public struct BreadcrumbItem: Identifiable, Hashable, Sendable {
+    public var id: String { url.path }
+    public let name: String
+    public let url: URL
+    
+    public init(name: String, url: URL) {
+        self.name = name
+        self.url = url
+    }
+}
+
 @MainActor
 public class NavigationState: ObservableObject {
     @Published public var currentDirectory: URL {
@@ -263,15 +274,15 @@ public class NavigationState: ObservableObject {
     public var canGoForward: Bool { !forwardStack.isEmpty }
     public var canGoUp: Bool { currentDirectory.path != "/" }
     
-    public var breadcrumbs: [(name: String, url: URL)] {
-        var crumbs: [(name: String, url: URL)] = []
+    public var breadcrumbs: [BreadcrumbItem] {
+        var crumbs: [BreadcrumbItem] = []
         var cur = currentDirectory.standardized
         
-        while cur.path != "/" {
-            crumbs.insert((name: cur.lastPathComponent, url: cur), at: 0)
-            cur = cur.deletingLastPathComponent()
+        while cur.path != "/" && !cur.path.isEmpty {
+            crumbs.insert(BreadcrumbItem(name: cur.lastPathComponent, url: cur), at: 0)
+            cur = cur.deletingLastPathComponent().standardized
         }
-        crumbs.insert((name: "Computer", url: URL(fileURLWithPath: "/")), at: 0)
+        crumbs.insert(BreadcrumbItem(name: "Computer", url: URL(fileURLWithPath: "/")), at: 0)
         return crumbs
     }
     
@@ -525,7 +536,7 @@ public class NavigationState: ObservableObject {
     
     public func navigateTo(url: URL, addToHistory: Bool = true) {
         let target = url.standardized
-        guard target != currentDirectory else { return }
+        guard target.path != currentDirectory.path else { return }
         lastNavigationTime = Date()
         
         var isDir: ObjCBool = false
