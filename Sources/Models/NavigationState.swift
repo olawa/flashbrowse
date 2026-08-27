@@ -263,6 +263,7 @@ public class NavigationState: ObservableObject {
     @Published public var isEditingPath: Bool = false
     @Published public var pathInputText: String = ""
     @Published public var volumeInfo: String = ""
+    @Published public var volumeStorage: VolumeStorageInfo? = nil
     
     private var backStack: [URL] = []
     private var forwardStack: [URL] = []
@@ -650,7 +651,9 @@ public class NavigationState: ObservableObject {
             showHidden: showHiddenFiles
         )
         self.items = rawItems
-        self.volumeInfo = FileSystemService.shared.volumeAvailableCapacity(at: currentDirectory)
+        let storage = FileSystemService.shared.getVolumeStorageInfo(at: currentDirectory)
+        self.volumeStorage = storage
+        self.volumeInfo = storage?.statusSummary ?? FileSystemService.shared.volumeAvailableCapacity(at: currentDirectory)
         applyFilterAndSort()
     }
     

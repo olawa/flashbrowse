@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Darwin
 
 public enum SortField: String, CaseIterable, Identifiable {
     case name = "Name"
@@ -213,20 +214,59 @@ public class FileSystemService {
         pasteboard.setString(paths, forType: .string)
     }
     
-    // MARK: - Volume Info
-    public func volumeAvailableCapacity(at url: URL) -> String {
-        do {
-            let values = try url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey])
-            if let available = values.volumeAvailableCapacityForImportantUsage,
-               let total = values.volumeTotalCapacity {
-                let formatter = ByteCountFormatter()
-                formatter.countStyle = .file
-                let freeStr = formatter.string(fromByteCount: available)
-                let totalStr = formatter.string(fromByteCount: Int64(total))
-                return "\(freeStr) free of \(totalStr)"
+    // MARK: - Volume & Disk Storage (df -h)
+    public func getVolumeStorageInfo(at url: URL) -> VolumeStorageInfo? {
+        let path = (url.path.isEmpty ? "/" : url.path)
+        var stat = statvfs()
+        
+        var total: Int64 = 0
+        var available: Int64 = 0
+        var used: Int64 = 0
+        
+        if statvfs(path, &stat) == 0 {
+            let frSize = Int64(stat.f_frsize)
+            total = Int64(stat.f_blocks) * frSize
+            available = Int64(stat.f_bavail) * frSize
+            let free = Int64(stat.f_bfree) * frSize
+            used = max(0, total - free)
+        }
+        
+        // Fallback or validation
+        if total <= 0 {
+            if let attrs = try? FileManager.default.attributesOfFileSystem(forPath: path) {
+                total = (attrs[.systemSize] as? Int64) ?? 0
+                let free = (attrs[.systemFreeSize] as? Int64) ?? 0
+                available = free
+                used = max(0, total - free)
             }
-        } catch {
-            // Fallback
+        }
+        
+        guard total > 0 else { return nil }
+        
+        var volumeName = "Macintosh HD"
+        if let values = try? url.resourceValues(forKeys: [.volumeNameKey]),
+           let vName = values.volumeName, !vName.isEmpty {
+            volumeName = vName
+        } else if path != "/" && !path.hasPrefix("/Users") {
+            volumeName = url.lastPathComponent
+        }
+        
+        let usedRatio = min(1.0, max(0.0, Double(used) / Double(total)))
+        let freeRatio = max(0.0, 1.0 - usedRatio)
+        
+        return VolumeStorageInfo(
+            volumeName: volumeName,
+            totalBytes: total,
+            availableBytes: available,
+            usedBytes: used,
+            usagePercentage: usedRatio,
+            freePercentage: freeRatio
+        )
+    }
+    
+    public func volumeAvailableCapacity(at url: URL) -> String {
+        if let info = getVolumeStorageInfo(at: url) {
+            return info.statusSummary
         }
         return ""
     }

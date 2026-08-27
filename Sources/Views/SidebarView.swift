@@ -201,6 +201,71 @@ public struct SidebarView: View {
                         ForEach(systemLocations) { loc in
                             sidebarRow(name: loc.name, icon: loc.icon, url: loc.url)
                         }
+                        
+                        // Local Disk Storage Progress Gauge (df -h)
+                        if let storage = state.volumeStorage {
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack {
+                                    Image(systemName: "internaldrive.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(
+                                            storage.isCriticalSpace
+                                            ? .red
+                                            : (storage.isLowSpace ? .orange : Color.flashbrowseAccent)
+                                        )
+                                    Text(storage.volumeName)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .lineLimit(1)
+                                    
+                                    Spacer()
+                                    
+                                    Text("\(storage.usedPercentInteger)% used")
+                                        .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                                        .foregroundColor(
+                                            storage.isCriticalSpace
+                                            ? .red
+                                            : (storage.isLowSpace ? .orange : .secondary)
+                                        )
+                                }
+                                
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        Capsule()
+                                            .fill(Color.secondary.opacity(0.18))
+                                            .frame(height: 5)
+                                        
+                                        Capsule()
+                                            .fill(
+                                                storage.isCriticalSpace
+                                                ? Color.red
+                                                : (storage.isLowSpace ? Color.orange : Color.flashbrowseAccent)
+                                            )
+                                            .frame(width: max(3, geo.size.width * CGFloat(storage.usagePercentage)), height: 5)
+                                    }
+                                }
+                                .frame(height: 5)
+                                
+                                HStack {
+                                    Text("\(storage.formattedAvailable) free")
+                                        .font(.system(size: 9.5, design: .monospaced))
+                                        .foregroundColor(
+                                            storage.isCriticalSpace
+                                            ? .red
+                                            : (storage.isLowSpace ? .orange : .secondary)
+                                        )
+                                    Spacer()
+                                    Text("of \(storage.formattedTotal)")
+                                        .font(.system(size: 9.5, design: .monospaced))
+                                        .foregroundColor(.secondary.opacity(0.7))
+                                }
+                            }
+                            .padding(8)
+                            .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                            .cornerRadius(6)
+                            .padding(.horizontal, 6)
+                            .padding(.top, 4)
+                            .help(storage.detailedTooltip)
+                        }
                     }
                 }
                 .padding(.horizontal, 8)

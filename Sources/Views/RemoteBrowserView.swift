@@ -168,6 +168,8 @@ public struct RemoteBrowserView: View {
                     Divider()
                     
                     FileTableView(state: localState)
+                    
+                    StatusBarView(state: localState)
                 }
                 .frame(minWidth: 320)
                 .background(
@@ -318,6 +320,10 @@ public struct RemoteBrowserView: View {
                     Divider()
                     
                     remoteFilesList
+                    
+                    Divider()
+                    
+                    remoteStatusBar
                 }
                 .frame(minWidth: 350)
                 .background(
@@ -584,5 +590,33 @@ public struct RemoteBrowserView: View {
         guard let host = sshService.activeHost else { return }
         let path = customPath ?? sshService.currentRemotePath
         TerminalService.shared.startSSHSession(host: host, remotePath: path)
+    }
+    
+    private var remoteStatusBar: some View {
+        HStack(spacing: 8) {
+            if selectedRemoteItems.isEmpty {
+                Text("\(sshService.remoteItems.count) remote items")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            } else {
+                Text("\(selectedRemoteItems.count) of \(sshService.remoteItems.count) selected")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.primary)
+            }
+            
+            Spacer()
+            
+            if sshService.isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Text("SSH: \(sshService.activeHost?.alias ?? "")")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(Color.green)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
