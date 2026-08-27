@@ -15,49 +15,49 @@ public class ExternalToolsService: ObservableObject {
     }
     
     public func checkInstalledTools() {
-        // Search common locations for rsnap
-        let candidatePaths = [
-            "/Users/olwal516/dev/bin/rsnap",
-            "/usr/local/bin/rsnap",
-            "/opt/homebrew/bin/rsnap",
-            NSString(string: "~/.cargo/bin/rsnap").expandingTildeInPath,
-            NSString(string: "~/bin/rsnap").expandingTildeInPath
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser.path
+        
+        var candidateDirs = [
+            "\(home)/dev/bin",
+            "\(home)/.cargo/bin",
+            "\(home)/bin",
+            "\(home)/.local/bin",
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "/usr/bin",
+            "/bin"
         ]
         
-        let fm = FileManager.default
-        for path in candidatePaths {
-            if fm.isExecutableFile(atPath: path) {
-                self.hasRsnap = true
-                self.rsnapPath = path
+        // Scan environment PATH as well
+        if let pathEnv = ProcessInfo.processInfo.environment["PATH"] {
+            let envDirs = pathEnv.split(separator: ":").map(String.init)
+            for dir in envDirs where !candidateDirs.contains(dir) {
+                candidateDirs.append(dir)
+            }
+        }
+        
+        var foundRsnap: String? = nil
+        for dir in candidateDirs {
+            let fullPath = (dir as NSString).expandingTildeInPath + "/rsnap"
+            if fm.isExecutableFile(atPath: fullPath) {
+                foundRsnap = fullPath
                 break
             }
         }
         
-        // Also check if rsnap is in PATH via `which`
-        if !hasRsnap {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-            process.arguments = ["rsnap"]
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            try? process.run()
-            process.waitUntilExit()
-            if process.terminationStatus == 0 {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                if let str = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !str.isEmpty {
-                    self.hasRsnap = true
-                    self.rsnapPath = str
-                }
-            }
-        }
+        self.hasRsnap = (foundRsnap != nil)
+        self.rsnapPath = foundRsnap
         
         // Check for IGV application
-        self.hasIGV = fm.fileExists(atPath: "/Applications/IGV.app") || fm.fileExists(atPath: NSString(string: "~/Applications/IGV.app").expandingTildeInPath)
+        self.hasIGV = fm.fileExists(atPath: "/Applications/IGV.app")
+            || fm.fileExists(atPath: "\(home)/Applications/IGV.app")
+            || fm.fileExists(atPath: "\(home)/Desktop/IGV.app")
     }
     
     /// Launch rsnap interactive viewer with one or multiple files/directories
     public func openInRsnap(urls: [URL]) {
-        guard let exe = rsnapPath else { return }
+        guard let exe = rsnapPath, FileManager.default.isExecutableFile(atPath: exe) else { return }
         
         // Filter bam, cram, sam, vcf, bed files
         var args: [String] = ["--viewer"]
@@ -79,7 +79,11 @@ public class ExternalToolsService: ObservableObject {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: exe)
             process.arguments = args
-            try? process.run()
+            do {
+                try process.run()
+            } catch {
+                // Handle/ignore process execution error safely without crashing
+            }
         }
     }
     
@@ -100,7 +104,11 @@ public class ExternalToolsService: ObservableObject {
                     let process = Process()
                     process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
                     process.arguments = ["-a", "IGV", "--args"] + urls.map { $0.path }
-                    try? process.run()
+                    do {
+                        try process.run()
+                    } catch {
+                        // Handle/ignore process execution error safely without crashing
+                    }
                 }
             }.resume()
         }
