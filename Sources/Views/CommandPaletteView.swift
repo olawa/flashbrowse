@@ -194,44 +194,13 @@ public struct CommandPaletteView: View {
                     ScrollView {
                         LazyVStack(spacing: 2) {
                             ForEach(Array(filteredCommands.enumerated()), id: \.element.id) { idx, cmd in
-                                let isSelected = idx == selectedIndex
+                                let isSelected = (idx == selectedIndex)
                                 
                                 Button(action: {
                                     cmd.action()
                                     isPresented = false
                                 }) {
-                                    HStack(spacing: 10) {
-                                        Image(systemName: cmd.icon)
-                                            .font(.system(size: 14))
-                                            .foregroundColor(isSelected ? .white : Color.flashbrowseAccent)
-                                            .frame(width: 22)
-                                        
-                                        VStack(alignment: .leading, spacing: 1) {
-                                            Text(cmd.title)
-                                                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                                                .foregroundColor(isSelected ? .white : .primary)
-                                            
-                                            Text(cmd.subtitle)
-                                                .font(.system(size: 11))
-                                                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        Text(cmd.category)
-                                            .font(.system(size: 9, weight: .bold))
-                                            .padding(.horizontal, 5)
-                                            .padding(.vertical, 2)
-                                            .background(isSelected ? Color.white.opacity(0.25) : Color(nsColor: .controlBackgroundColor))
-                                            .foregroundColor(isSelected ? .white : .secondary)
-                                            .cornerRadius(4)
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 7)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(isSelected ? Color.flashbrowseAccent : Color.clear)
-                                    )
+                                    commandRow(cmd: cmd, isSelected: isSelected)
                                 }
                                 .buttonStyle(.plain)
                                 .id(idx)
@@ -267,5 +236,41 @@ public struct CommandPaletteView: View {
         guard selectedIndex >= 0, selectedIndex < filteredCommands.count else { return }
         filteredCommands[selectedIndex].action()
         isPresented = false
+    }
+    
+    @ViewBuilder
+    private func commandRow(cmd: PaletteCommand, isSelected: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: cmd.icon)
+                .font(.system(size: 14))
+                .foregroundColor(isSelected ? .white : Color.flashbrowseAccent)
+                .frame(width: 22)
+            
+            VStack(alignment: .leading, spacing: 1) {
+                Text(cmd.title)
+                    .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                    .foregroundColor(isSelected ? .white : .primary)
+                
+                Text(cmd.subtitle)
+                    .font(.system(size: 11))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+            }
+            
+            Spacer()
+            
+            Text(cmd.category)
+                .font(.system(size: 9, weight: .bold))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(isSelected ? Color.white.opacity(0.25) : Color(nsColor: .controlBackgroundColor))
+                .foregroundColor(isSelected ? .white : .secondary)
+                .cornerRadius(4)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.flashbrowseAccent : Color.clear)
+        )
     }
 }

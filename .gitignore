@@ -1,6 +1,8 @@
 .DS_Store
 *.app
 cache/
+cache_arm64/
+cache_x86_64/
 Flashbrowse
 FlashbrowseTests
 .build/
