@@ -8,6 +8,9 @@ public class ExternalToolsService: ObservableObject {
     @Published public var hasRsnap: Bool = false
     @Published public var rsnapPath: String?
     
+    @Published public var hasRsQc: Bool = false
+    @Published public var rsQcPath: String?
+    
     @Published public var hasIGV: Bool = false
     
     private init() {
@@ -38,21 +41,37 @@ public class ExternalToolsService: ObservableObject {
         }
         
         var foundRsnap: String? = nil
+        var foundRsQc: String? = nil
         for dir in candidateDirs {
-            let fullPath = (dir as NSString).expandingTildeInPath + "/rsnap"
-            if fm.isExecutableFile(atPath: fullPath) {
-                foundRsnap = fullPath
-                break
+            let rsnapFull = (dir as NSString).expandingTildeInPath + "/rsnap"
+            if foundRsnap == nil && fm.isExecutableFile(atPath: rsnapFull) {
+                foundRsnap = rsnapFull
+            }
+            
+            let rsQcFull = (dir as NSString).expandingTildeInPath + "/rs-qc"
+            if foundRsQc == nil && fm.isExecutableFile(atPath: rsQcFull) {
+                foundRsQc = rsQcFull
             }
         }
         
         self.hasRsnap = (foundRsnap != nil)
         self.rsnapPath = foundRsnap
         
+        self.hasRsQc = (foundRsQc != nil)
+        self.rsQcPath = foundRsQc
+        
         // Check for IGV application
         self.hasIGV = fm.fileExists(atPath: "/Applications/IGV.app")
             || fm.fileExists(atPath: "\(home)/Applications/IGV.app")
             || fm.fileExists(atPath: "\(home)/Desktop/IGV.app")
+    }
+    
+    /// Run rs-qc align on BAM files and pipe to terminal or execute
+    public func runRsQc(urls: [URL]) {
+        guard let exe = rsQcPath ?? (hasRsQc ? "rs-qc" : nil) else { return }
+        let inputs = urls.map { $0.path.shellEscaped }.joined(separator: " ")
+        let cmd = "\(exe.shellEscaped) align -i \(inputs)"
+        TerminalService.shared.executeCommand(cmd)
     }
     
     /// Launch rsnap interactive viewer with one or multiple files/directories

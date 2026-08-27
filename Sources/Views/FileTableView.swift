@@ -666,6 +666,16 @@ public struct FileTableView: View {
         }
         
         let toolsService = ExternalToolsService.shared
+        let isBamOrCram = ["bam", "cram"].contains(item.url.pathExtension.lowercased()) || item.url.lastPathComponent.hasSuffix(".bam") || item.url.lastPathComponent.hasSuffix(".cram")
+        
+        if toolsService.hasRsQc && isBamOrCram {
+            Button(action: {
+                toolsService.runRsQc(urls: targets)
+            }) {
+                Label(targets.count > 1 ? "Kör rs-qc (\(targets.count) filer)" : "Kör rs-qc (Alignment QC)", systemImage: "waveform.badge.magnifyingglass")
+            }
+        }
+        
         if toolsService.hasRsnap && ExternalToolsService.isGenomicsFile(url: item.url) {
             Button(action: {
                 toolsService.openInRsnap(urls: targets)
