@@ -335,26 +335,63 @@ public struct InspectorView: View {
                 
                 Spacer()
                 
-                // Tile / iPad button
-                Button(action: {
-                    if NSScreen.screens.count > 1 {
-                        InspectorWindowController.shared.moveToExternalOrIPad()
-                    } else {
-                        InspectorWindowController.shared.tileAlongsideMainWindow()
+                // Detach / Dock button
+                if state.isInspectorDetached {
+                    // Dock back into browser
+                    Button(action: {
+                        state.dockInspector()
+                    }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "rectangle.portrait.badge.arrow.right")
+                            Text("Dock")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(cardBgColor)
+                        .cornerRadius(4)
                     }
-                }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: NSScreen.screens.count > 1 ? "ipad.and.arrow.forward" : "rectangle.split.2x1")
-                        Text(NSScreen.screens.count > 1 ? "iPad" : "Tile")
-                            .font(.system(size: 10, weight: .semibold))
+                    .buttonStyle(.plain)
+                    .help("Dock inspector back inside Flashbrowse browser window")
+                    
+                    // Tile / iPad button (only in detached mode)
+                    Button(action: {
+                        if NSScreen.screens.count > 1 {
+                            InspectorWindowController.shared.moveToExternalOrIPad()
+                        } else {
+                            InspectorWindowController.shared.tileAlongsideMainWindow()
+                        }
+                    }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: NSScreen.screens.count > 1 ? "ipad.and.arrow.forward" : "rectangle.split.2x1")
+                            Text(NSScreen.screens.count > 1 ? "iPad" : "Tile")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(cardBgColor)
+                        .cornerRadius(4)
                     }
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(cardBgColor)
-                    .cornerRadius(4)
+                    .buttonStyle(.plain)
+                    .help(NSScreen.screens.count > 1 ? "Move to iPad or External Screen" : "Tile side-by-side with Flashbrowse browser")
+                } else {
+                    // Detach button
+                    Button(action: {
+                        state.detachInspector()
+                    }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "rectangle.portrait.and.arrow.forward")
+                            Text("Detach")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(cardBgColor)
+                        .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Detach inspector into separate floating/external window")
                 }
-                .buttonStyle(.plain)
-                .help(NSScreen.screens.count > 1 ? "Move to iPad or External Screen" : "Tile side-by-side with Flashbrowse browser (Zero Overlap)")
                 
                 // Dark Theme Toggle
                 Button(action: {
@@ -371,22 +408,41 @@ public struct InspectorView: View {
                 .buttonStyle(.plain)
                 .help("Toggle Inspector Theme")
                 
-                // Jump to Main Window Button
-                Button(action: {
-                    InspectorWindowController.shared.warpMouseToMainWindow()
-                }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "cursorarrow.motionlines")
-                        Text("Jump (Cmd+<)")
-                            .font(.system(size: 9, weight: .medium))
+                if state.isInspectorDetached {
+                    // Jump to Main Window Button
+                    Button(action: {
+                        InspectorWindowController.shared.warpMouseToMainWindow()
+                    }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "cursorarrow.motionlines")
+                            Text("Jump (Cmd+<)")
+                                .font(.system(size: 9, weight: .medium))
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 3)
+                        .background(cardBgColor)
+                        .cornerRadius(4)
                     }
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 3)
-                    .background(cardBgColor)
-                    .cornerRadius(4)
+                    .buttonStyle(.plain)
+                    .help("Teleport cursor to main window (Cmd+<)")
+                } else {
+                    // Close button when embedded
+                    Button(action: {
+                        withAnimation {
+                            state.isInspectorVisible = false
+                        }
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 3)
+                            .background(cardBgColor)
+                            .cornerRadius(4)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Hide Inspector (Cmd+I)")
                 }
-                .buttonStyle(.plain)
-                .help("Teleport cursor to main window (Cmd+<)")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -406,11 +462,11 @@ public struct InspectorView: View {
                     HSplitView {
                         // Preview Area (Left / Main)
                         previewContainer(meta: meta)
-                            .frame(minWidth: 350, maxWidth: .infinity, minHeight: 350)
+                            .frame(minWidth: 150, maxWidth: .infinity, minHeight: 180)
                         
                         // Metadata Panel (Right)
                         metadataSidebar(meta: meta)
-                            .frame(minWidth: 120, idealWidth: 160, maxWidth: 220)
+                            .frame(minWidth: 110, idealWidth: 135, maxWidth: 180)
                     }
                 }
             } else {
@@ -1290,8 +1346,14 @@ public class InspectorWindowController: NSObject, NSWindowDelegate {
         window?.level = isPinned ? .floating : .normal
     }
     
+    public func closeWindow() {
+        window?.orderOut(nil)
+        SharedInspectorState.shared.isInspectorWindowOpen = false
+    }
+    
     public func windowWillClose(_ notification: Notification) {
         SharedInspectorState.shared.isInspectorWindowOpen = false
+        SharedInspectorState.shared.isInspectorDetached = false
     }
     
     public func warpMouseToInspector() {

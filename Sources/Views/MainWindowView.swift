@@ -25,26 +25,35 @@ public struct MainWindowView: View {
             NavigationSplitView {
                 SidebarView(state: currentActiveState)
             } detail: {
-                VStack(spacing: 0) {
-                    if sshService.isRemoteBrowserOpen {
-                        RemoteBrowserView(localState: leftState)
-                    } else if indexService.activeIndex != nil {
-                        IndexBrowserView(navState: currentActiveState)
-                    } else {
-                        DualPaneContainerView(
-                            leftState: leftState,
-                            rightState: rightState,
-                            activePane: $activePane,
-                            isDualPane: $isDualPane,
-                            isCommanderMode: $isCommanderMode
-                        )
+                HSplitView {
+                    VStack(spacing: 0) {
+                        if sshService.isRemoteBrowserOpen {
+                            RemoteBrowserView(localState: leftState)
+                        } else if indexService.activeIndex != nil {
+                            IndexBrowserView(navState: currentActiveState)
+                        } else {
+                            DualPaneContainerView(
+                                leftState: leftState,
+                                rightState: rightState,
+                                activePane: $activePane,
+                                isDualPane: $isDualPane,
+                                isCommanderMode: $isCommanderMode
+                            )
+                        }
+                        
+                        // Embedded Terminal Drawer (VS Code style)
+                        if terminalService.isOpen {
+                            Divider()
+                            TerminalPanelView()
+                                .transition(.move(edge: .bottom))
+                        }
                     }
+                    .frame(minWidth: 460, maxWidth: .infinity)
                     
-                    // Embedded Terminal Drawer (VS Code style)
-                    if terminalService.isOpen {
-                        Divider()
-                        TerminalPanelView()
-                            .transition(.move(edge: .bottom))
+                    // Attached Inspector Pane (1/3 of browser, resizable)
+                    if inspectorState.isInspectorVisible && !inspectorState.isInspectorDetached {
+                        InspectorView()
+                            .frame(minWidth: 280, idealWidth: 380, maxWidth: 650)
                     }
                 }
             }
@@ -58,7 +67,7 @@ public struct MainWindowView: View {
                 ? "\(sshService.activeHost?.connectionString ?? ""):\(sshService.currentRemotePath)"
                 : (indexService.activeIndex != nil ? "\(indexService.totalFilesFound) matching files across workspace" : currentActiveState.currentDirectory.path)
             )
-            .frame(minWidth: 800, minHeight: 520)
+            .frame(minWidth: 920, minHeight: 560)
             
             // Command Palette Overlay (Cmd+K / Cmd+P)
             if isCommandPaletteOpen {
@@ -175,14 +184,16 @@ public struct MainWindowView: View {
                 }
                 .help("Directory Disk Usage & Subfolder Sizes (du -h) — Option+S")
                 
-                // Inspector Companion & iPad Window Toggle (Cmd+I / Cmd+Option+I)
+                // Inspector Toggle (Cmd+I)
                 Button(action: {
-                    InspectorWindowController.shared.toggleWindow()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        inspectorState.toggleInspector()
+                    }
                 }) {
-                    Image(systemName: inspectorState.isInspectorWindowOpen ? "sidebar.right" : "sidebar.right")
-                        .foregroundColor(inspectorState.isInspectorWindowOpen ? Color.flashbrowseAccent : .primary)
+                    Image(systemName: "sidebar.right")
+                        .foregroundColor((inspectorState.isInspectorVisible && !inspectorState.isInspectorDetached) || (inspectorState.isInspectorDetached && inspectorState.isInspectorWindowOpen) ? Color.flashbrowseAccent : .primary)
                 }
-                .help("Toggle Inspector Companion / iPad Window (Cmd+I / Cmd+Option+I)")
+                .help("Toggle Inspector (Cmd+I) • Detach: ⧉")
             }
         }
         .sheet(isPresented: $showingBatchRename) {
@@ -215,8 +226,8 @@ public struct MainWindowView: View {
         }
         .onAppear {
             updateTerminalCallback()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                if UserDefaults.standard.object(forKey: "flashbrowse_auto_open_inspector") == nil || UserDefaults.standard.bool(forKey: "flashbrowse_auto_open_inspector") {
+            if inspectorState.isInspectorDetached && inspectorState.isInspectorVisible {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     InspectorWindowController.shared.showWindow()
                 }
             }

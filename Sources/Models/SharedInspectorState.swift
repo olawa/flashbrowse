@@ -97,6 +97,8 @@ public class SharedInspectorState: ObservableObject {
     @Published public var previewImage: NSImage?
     @Published public var parsedTableRows: [[String]] = []
     @Published public var isInspectorWindowOpen: Bool = false
+    @Published public var isInspectorVisible: Bool = true
+    @Published public var isInspectorDetached: Bool = false
     
     // Photo Organizer & Sibling Navigation
     @Published public var siblingImageURLs: [URL] = []
@@ -130,6 +132,29 @@ public class SharedInspectorState: ObservableObject {
     }
     
     private init() {}
+    
+    public func toggleInspector() {
+        if isInspectorDetached {
+            if isInspectorWindowOpen {
+                InspectorWindowController.shared.closeWindow()
+            } else {
+                InspectorWindowController.shared.showWindow()
+            }
+        } else {
+            isInspectorVisible.toggle()
+        }
+    }
+    
+    public func detachInspector() {
+        isInspectorDetached = true
+        InspectorWindowController.shared.showWindow()
+    }
+    
+    public func dockInspector() {
+        isInspectorDetached = false
+        InspectorWindowController.shared.closeWindow()
+        isInspectorVisible = true
+    }
     
     public func updateTarget(url: URL?) {
         guard self.currentURL != url else { return }

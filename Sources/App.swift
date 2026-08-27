@@ -9,6 +9,7 @@ struct FlashbrowseApp: App {
         WindowGroup {
             MainWindowView()
         }
+        .defaultSize(width: 1280, height: 800)
         .windowStyle(.titleBar)
         .windowToolbarStyle(.unified)
         .commands {
@@ -65,12 +66,21 @@ struct FlashbrowseApp: App {
                 }
                 .keyboardShortcut("j", modifiers: .command)
                 
-                Button("Open Multi-Monitor Inspector") {
-                    InspectorWindowController.shared.toggleWindow()
+                Button("Toggle Inspector") {
+                    SharedInspectorState.shared.toggleInspector()
+                }
+                .keyboardShortcut("i", modifiers: .command)
+                
+                Button("Detach / Dock Inspector") {
+                    if SharedInspectorState.shared.isInspectorDetached {
+                        SharedInspectorState.shared.dockInspector()
+                    } else {
+                        SharedInspectorState.shared.detachInspector()
+                    }
                 }
                 .keyboardShortcut("i", modifiers: [.command, .option])
                 
-                Button("Jump Mouse to External Screen") {
+                Button("Jump Mouse to Detached Screen") {
                     InspectorWindowController.shared.toggleMouseBetweenScreens()
                 }
                 .keyboardShortcut("<", modifiers: .command)
