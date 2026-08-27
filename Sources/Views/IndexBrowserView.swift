@@ -46,6 +46,43 @@ public struct IndexBrowserView: View {
                     .background(index.color.opacity(0.12))
                     .cornerRadius(6)
                     
+                    // Scope / Root folder selector
+                    Menu {
+                        Button("Scan Current Folder (\(navState.currentDirectory.lastPathComponent))") {
+                            indexService.startIndexScan(for: index, in: navState.currentDirectory)
+                        }
+                        Button("Scan User Home (~)") {
+                            indexService.startIndexScan(for: index, in: FileManager.default.homeDirectoryForCurrentUser)
+                        }
+                        Divider()
+                        Button("Choose Folder to Scan...") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.allowsMultipleSelection = false
+                            if panel.runModal() == .OK, let chosen = panel.url {
+                                indexService.startIndexScan(for: index, in: chosen)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "folder.badge.gearshape")
+                                .font(.system(size: 10))
+                                .foregroundColor(Color.flashbrowseAccent)
+                            Text("Root: \(indexService.currentRootURL?.lastPathComponent ?? "Current")")
+                                .font(.system(size: 11, weight: .medium))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(6)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Change base root folder to scan for files (Current folder, Home ~, or custom)")
+                    
                     let selectedFolderCount = indexService.selectedDirectories.isEmpty ? indexService.indexedGroups.count : indexService.selectedDirectories.count
                     Text("• \(filteredItemsInSelectedGroups.count) files in \(selectedFolderCount) of \(indexService.indexedGroups.count) folders")
                         .font(.system(size: 12))
@@ -250,6 +287,17 @@ public struct IndexBrowserView: View {
                                     .background(isSelected ? Color.white.opacity(0.25) : Color(nsColor: .controlBackgroundColor))
                                     .foregroundColor(isSelected ? .white : .secondary)
                                     .cornerRadius(8)
+                                
+                                Button(action: {
+                                    navState.navigateTo(url: group.directoryURL)
+                                    indexService.clearIndex()
+                                }) {
+                                    Image(systemName: "arrow.right.circle.fill")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(isSelected ? .white : Color.flashbrowseAccent)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Öppna mappen i Flashbrowse (Dubbelklicka eller klicka här)")
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
@@ -260,6 +308,12 @@ public struct IndexBrowserView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .simultaneousGesture(
+                            TapGesture(count: 2).onEnded {
+                                navState.navigateTo(url: group.directoryURL)
+                                indexService.clearIndex()
+                            }
+                        )
                         .contextMenu {
                             Button("Select Only This Directory") {
                                 indexService.selectedDirectories = [group.directoryURL]
@@ -370,11 +424,23 @@ public struct IndexBrowserView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             if showDirectoryColumn {
-                Text(item.url.deletingLastPathComponent().lastPathComponent)
-                    .font(.system(size: 10))
-                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                Button(action: {
+                    navState.navigateTo(url: item.url.deletingLastPathComponent())
+                    navState.selectedURLs = [item.url]
+                    indexService.clearIndex()
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 9))
+                        Text(item.url.deletingLastPathComponent().lastPathComponent)
+                            .font(.system(size: 10))
+                    }
+                    .foregroundColor(isSelected ? .white.opacity(0.85) : Color.flashbrowseAccent)
                     .lineLimit(1)
                     .frame(width: isCompact ? 90 : 120, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .help("Öppna mappen i Flashbrowse och markera denna fil")
             }
             
             Text(item.formattedSize)
@@ -461,6 +527,12 @@ public struct IndexBrowserView: View {
             }
             
             Divider()
+            
+            Button("Open Containing Folder in Flashbrowse") {
+                navState.navigateTo(url: item.url.deletingLastPathComponent())
+                navState.selectedURLs = [item.url]
+                indexService.clearIndex()
+            }
             
             Button("Open File") {
                 FileSystemService.shared.openItem(url: item.url)

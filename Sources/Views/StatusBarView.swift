@@ -55,64 +55,6 @@ public struct StatusBarView: View {
             
             Spacer()
             
-            // Intuitive Disk Storage with Progress Bar (df -h)
-            if let storage = state.volumeStorage {
-                HStack(spacing: 5) {
-                    Image(systemName: "internaldrive.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(
-                            storage.isCriticalSpace
-                            ? .red
-                            : (storage.isLowSpace ? .orange : Color.flashbrowseAccent)
-                        )
-                    
-                    // Graphical Progress Bar Capsule
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.secondary.opacity(0.2))
-                            .frame(width: 46, height: 5.5)
-                        
-                        Capsule()
-                            .fill(
-                                storage.isCriticalSpace
-                                ? Color.red
-                                : (storage.isLowSpace ? Color.orange : Color.flashbrowseAccent)
-                            )
-                            .frame(width: max(2.5, 46 * CGFloat(storage.usagePercentage)), height: 5.5)
-                    }
-                    
-                    Text("\(storage.formattedAvailable) free of \(storage.formattedTotal)")
-                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                        .foregroundColor(
-                            storage.isCriticalSpace
-                            ? .red
-                            : (storage.isLowSpace ? .orange : .secondary)
-                        )
-                    
-                    Text("(\(storage.usedPercentInteger)%)")
-                        .font(.system(size: 9.5, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.75))
-                }
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(
-                    storage.isCriticalSpace
-                    ? Color.red.opacity(0.12)
-                    : (storage.isLowSpace ? Color.orange.opacity(0.1) : Color.clear)
-                )
-                .cornerRadius(4)
-                .help(storage.detailedTooltip)
-            } else if !state.volumeInfo.isEmpty {
-                HStack(spacing: 4) {
-                    Image(systemName: "internaldrive")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                    Text(state.volumeInfo)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-            }
-            
             // Refresh Button
             Button(action: {
                 state.reload()

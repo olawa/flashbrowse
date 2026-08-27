@@ -29,6 +29,7 @@ public class IndexService: ObservableObject {
     public static let shared = IndexService()
     
     @Published public var activeIndex: FileTypeIndex?
+    @Published public var currentRootURL: URL?
     @Published public var indexedGroups: [DirectoryIndexGroup] = []
     @Published public var selectedDirectories: Set<URL> = []
     @Published public var isScanning: Bool = false
@@ -85,13 +86,15 @@ public class IndexService: ObservableObject {
     
     public func startIndexScan(for index: FileTypeIndex, in rootURL: URL) {
         self.activeIndex = index
+        self.currentRootURL = rootURL
         self.indexedGroups = []
         self.selectedDirectory = nil
         self.isScanning = true
         self.totalFilesFound = 0
         
         scanTask?.cancel()
-        scanTask = Task {
+        // Execute recursive scan entirely in a background utility task to never block the main UI thread
+        scanTask = Task.detached(priority: .utility) {
             let extensions = index.extensions
             let fm = FileManager.default
             let options: FileManager.DirectoryEnumerationOptions = [.skipsHiddenFiles, .skipsPackageDescendants]
@@ -101,7 +104,9 @@ public class IndexService: ObservableObject {
                 includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
                 options: options
             ) else {
-                self.isScanning = false
+                await MainActor.run {
+                    self.isScanning = false
+                }
                 return
             }
             
@@ -146,13 +151,21 @@ public class IndexService: ObservableObject {
                 
                 computedGroups.sort { $0.relativePath.localizedStandardCompare($1.relativePath) == .orderedAscending }
                 
-                self.indexedGroups = computedGroups
-                self.totalFilesFound = count
-                self.isScanning = false
-                
-                // Select first directory by default
-                if let first = computedGroups.first {
-                    self.selectedDirectory = first.directoryURL
+                let finalGroups = computedGroups
+                let finalCount = count
+                await MainActor.run {
+                    self.indexedGroups = finalGroups
+                    self.totalFilesFound = finalCount
+                    self.isScanning = false
+                    
+                    // Select first directory by default
+                    if let first = finalGroups.first {
+                        self.selectedDirectory = first.directoryURL
+                    }
+                }
+            } else {
+                await MainActor.run {
+                    self.isScanning = false
                 }
             }
         }
