@@ -226,6 +226,9 @@ public struct MainWindowView: View {
         }
         .onAppear {
             updateTerminalCallback()
+            if let screen = NSScreen.main, let win = NSApp.windows.first(where: { !($0 is NSPanel) && $0.canBecomeMain }) {
+                win.setFrame(screen.visibleFrame, display: true, animate: false)
+            }
             if inspectorState.isInspectorDetached && inspectorState.isInspectorVisible {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     InspectorWindowController.shared.showWindow()

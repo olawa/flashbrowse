@@ -142,6 +142,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             Self.lastWindowActivationTime = Date()
         }
         
+        // Maximize to full screen width & height at startup
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if let screen = NSScreen.main {
+                let frame = screen.visibleFrame
+                for win in NSApp.windows where !(win is NSPanel) && win.canBecomeMain {
+                    win.setFrame(frame, display: true, animate: false)
+                }
+            }
+        }
+        
         // Touch / Trackpad & Remote Scroll Monitor
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .swipe, .leftMouseDown, .magnify]) { event in
             // Check if interaction is targeted at Inspector Window

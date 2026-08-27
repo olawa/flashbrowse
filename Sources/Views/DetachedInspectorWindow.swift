@@ -466,7 +466,7 @@ public struct InspectorView: View {
                         
                         // Metadata Panel (Right)
                         metadataSidebar(meta: meta)
-                            .frame(minWidth: 110, idealWidth: 135, maxWidth: 180)
+                            .frame(minWidth: 70, idealWidth: 95, maxWidth: 120)
                     }
                 }
             } else {
@@ -652,56 +652,58 @@ public struct InspectorView: View {
     @ViewBuilder
     private func metadataSidebar(meta: ExtendedFileMetadata) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("INFORMATION")
-                    .font(.system(size: 9.5, weight: .bold))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("INFO")
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.secondary)
                 
-                VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .leading, spacing: 4) {
                     metaItem(label: "KIND", value: meta.kindDescription)
                     metaItem(label: "SIZE", value: meta.sizeFormatted)
                     if let dim = meta.dimensions {
-                        metaItem(label: "DIMENSIONS", value: dim)
+                        metaItem(label: "DIM", value: dim)
                     }
                     metaItem(label: "MODIFIED", value: meta.dateModified)
-                    metaItem(label: "PERMISSIONS", value: meta.permissions)
+                    metaItem(label: "PERM", value: meta.permissions)
                 }
-                .padding(8)
+                .padding(5)
                 .background(cardBgColor)
-                .cornerRadius(6)
+                .cornerRadius(4)
                 
-                Text("LOCATION")
-                    .font(.system(size: 9.5, weight: .bold))
+                Text("PATH")
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.secondary)
                 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(meta.path)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.system(size: 8, design: .monospaced))
                         .foregroundColor(isDarkTheme ? Color.white.opacity(0.8) : .secondary)
                         .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(4)
+                        .truncationMode(.middle)
+                        .help(meta.path)
                     
                     Button(action: {
                         let pasteboard = NSPasteboard.general
                         pasteboard.clearContents()
                         pasteboard.setString(meta.path, forType: .string)
                     }) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: 3) {
                             Image(systemName: "doc.on.doc")
+                                .font(.system(size: 8))
+                            Text("Copy")
                                 .font(.system(size: 9))
-                            Text("Copy Path")
-                                .font(.system(size: 10.5))
                         }
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .controlSize(.mini)
                 }
-                .padding(8)
+                .padding(5)
                 .background(cardBgColor)
-                .cornerRadius(6)
+                .cornerRadius(4)
             }
-            .padding(10)
+            .padding(4)
         }
         .background(bgColor)
     }
@@ -724,12 +726,12 @@ public struct InspectorView: View {
     
     @ViewBuilder
     private func metaItem(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 0.5) {
             Text(label)
-                .font(.system(size: 8.5, weight: .bold))
-                .foregroundColor(.secondary.opacity(0.8))
+                .font(.system(size: 7.5, weight: .bold))
+                .foregroundColor(.secondary.opacity(0.7))
             Text(value)
-                .font(.system(size: 11))
+                .font(.system(size: 9.5))
                 .foregroundColor(isDarkTheme ? .white : .primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
