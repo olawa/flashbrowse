@@ -291,10 +291,13 @@ public class NavigationState: ObservableObject {
     }
     
     public var inspectorState: SharedInspectorState
+    private var inspectorURLObserver: NSObjectProtocol?
+    private var reloadDirObserver: NSObjectProtocol?
     
     public init(initialDirectory: URL = FileManager.default.homeDirectoryForCurrentUser, inspectorState: SharedInspectorState? = nil) {
         self.currentDirectory = initialDirectory.standardized
-        self.inspectorState = inspectorState ?? SharedInspectorState.shared
+        let resolvedInspector = inspectorState ?? SharedInspectorState.shared
+        self.inspectorState = resolvedInspector
         self.pathInputText = self.currentDirectory.path
         loadBookmarks()
         loadPresets()
@@ -305,10 +308,18 @@ public class NavigationState: ObservableObject {
             self.applyWindowPinning()
         }
         
-        NotificationCenter.default.addObserver(forName: .flashbrowseInspectorSelectedURL, object: nil, queue: .main) { [weak self] notif in
-            guard let targetURL = notif.object as? URL else { return }
+        self.inspectorURLObserver = NotificationCenter.default.addObserver(forName: .flashbrowseInspectorSelectedURL, object: nil, queue: .main) { [weak self] notif in
+            let targetURL: URL? = (notif.object as? URL) ?? (notif.userInfo?["url"] as? URL)
+            guard let targetURL = targetURL else { return }
+            let sender = notif.object as? SharedInspectorState
+            
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
+                // Pane isolation check: only respond if the sender is this state's inspector or the shared singleton
+                if let sender = sender {
+                    guard sender === self.inspectorState || sender === SharedInspectorState.shared else { return }
+                }
+                
                 let parent = targetURL.deletingLastPathComponent().standardized
                 if parent == self.currentDirectory.standardized {
                     self.selectedURLs = [targetURL]
@@ -317,10 +328,19 @@ public class NavigationState: ObservableObject {
             }
         }
         
-        NotificationCenter.default.addObserver(forName: .flashbrowseReloadDirectory, object: nil, queue: .main) { [weak self] _ in
+        self.reloadDirObserver = NotificationCenter.default.addObserver(forName: .flashbrowseReloadDirectory, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.reload()
             }
+        }
+    }
+    
+    deinit {
+        if let obs = inspectorURLObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        if let obs = reloadDirObserver {
+            NotificationCenter.default.removeObserver(obs)
         }
     }
     

@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "Flashbrowse",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .executable(name: "Flashbrowse", targets: ["Flashbrowse"])

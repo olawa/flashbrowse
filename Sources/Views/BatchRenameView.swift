@@ -41,9 +41,24 @@ public struct BatchRenameView: View {
     @State private var caseMode: TextCaseMode = .lowercase
     @State private var applyToExtension: Bool = false
     
+    @State private var errorMessage: String?
+    @State private var showingErrorAlert: Bool = false
+    
     public init(items: [FileItem], onComplete: @escaping () -> Void) {
         self.items = items
         self.onComplete = onComplete
+    }
+    
+    private var conflictingNames: Set<String> {
+        var counts: [String: Int] = [:]
+        for item in previewItems {
+            counts[item.newName.lowercased(), default: 0] += 1
+        }
+        return Set(counts.filter { $0.value > 1 }.map { $0.key })
+    }
+    
+    private var hasNameCollisions: Bool {
+        !conflictingNames.isEmpty
     }
     
     private var previewItems: [BatchRenameItem] {
@@ -236,6 +251,8 @@ public struct BatchRenameView: View {
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         ForEach(previewItems) { item in
+                            let isCollision = conflictingNames.contains(item.newName.lowercased())
+                            
                             HStack {
                                 Text(item.originalName)
                                     .font(.system(size: 12))
@@ -245,16 +262,24 @@ public struct BatchRenameView: View {
                                 
                                 Image(systemName: "arrow.right")
                                     .font(.system(size: 10))
-                                    .foregroundColor(item.isChanged ? Color.flashbrowseAccent : .secondary.opacity(0.4))
+                                    .foregroundColor(isCollision ? .red : (item.isChanged ? Color.flashbrowseAccent : .secondary.opacity(0.4)))
                                     .frame(width: 30)
                                 
                                 HStack(spacing: 6) {
                                     Text(item.newName)
                                         .font(.system(size: 12, weight: item.isChanged ? .semibold : .regular))
-                                        .foregroundColor(item.isChanged ? .primary : .secondary)
+                                        .foregroundColor(isCollision ? .red : (item.isChanged ? .primary : .secondary))
                                         .lineLimit(1)
                                     
-                                    if item.isChanged {
+                                    if isCollision {
+                                        Text("DUPLICATE")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 1)
+                                            .background(Color.red.opacity(0.2))
+                                            .foregroundColor(.red)
+                                            .cornerRadius(3)
+                                    } else if item.isChanged {
                                         Text("MODIFIED")
                                             .font(.system(size: 9, weight: .bold))
                                             .padding(.horizontal, 4)
@@ -268,7 +293,7 @@ public struct BatchRenameView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 4)
-                            .background(item.isChanged ? Color.flashbrowseAccent.opacity(0.06) : Color.clear)
+                            .background(isCollision ? Color.red.opacity(0.08) : (item.isChanged ? Color.flashbrowseAccent.opacity(0.06) : Color.clear))
                         }
                     }
                     .padding(.vertical, 4)
@@ -280,9 +305,19 @@ public struct BatchRenameView: View {
             
             // Bottom Action Bar
             HStack {
-                Text("\(changeCount) of \(items.count) files will be renamed")
-                    .font(.system(size: 12))
-                    .foregroundColor(changeCount > 0 ? .primary : .secondary)
+                if hasNameCollisions {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                        Text("Duplicate filenames detected. Resolve before renaming.")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.red)
+                    }
+                } else {
+                    Text("\(changeCount) of \(items.count) files will be renamed")
+                        .font(.system(size: 12))
+                        .foregroundColor(changeCount > 0 ? .primary : .secondary)
+                }
                 
                 Spacer()
                 
@@ -296,22 +331,42 @@ public struct BatchRenameView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.flashbrowseAccent)
-                .disabled(changeCount == 0)
+                .disabled(changeCount == 0 || hasNameCollisions)
                 .keyboardShortcut(.defaultAction)
             }
             .padding(14)
             .background(Color(nsColor: .windowBackgroundColor))
         }
         .frame(minWidth: 620, idealWidth: 700, minHeight: 450, idealHeight: 520)
+        .alert("Misslyckades att byta namn", isPresented: $showingErrorAlert) {
+            Button("OK", role: .cancel) {
+                onComplete()
+                dismiss()
+            }
+        } message: {
+            Text(errorMessage ?? "Ett fel uppstod vid omdöpning av filerna.")
+        }
     }
     
     private func executeRename() {
         let fm = FileManager.default
+        var errors: [String] = []
+        
         for item in previewItems where item.isChanged {
             let targetURL = item.originalURL.deletingLastPathComponent().appendingPathComponent(item.newName)
-            try? fm.moveItem(at: item.originalURL, to: targetURL)
+            do {
+                try fm.moveItem(at: item.originalURL, to: targetURL)
+            } catch {
+                errors.append("\(item.originalName): \(error.localizedDescription)")
+            }
         }
-        onComplete()
-        dismiss()
+        
+        if !errors.isEmpty {
+            errorMessage = errors.joined(separator: "\n")
+            showingErrorAlert = true
+        } else {
+            onComplete()
+            dismiss()
+        }
     }
 }

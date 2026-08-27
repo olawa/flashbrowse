@@ -4,7 +4,7 @@ import AppKit
 import Combine
 import CoreGraphics
 
-public struct ExtendedFileMetadata {
+public struct ExtendedFileMetadata: Sendable {
     public let name: String
     public let path: String
     public let sizeFormatted: String
@@ -16,6 +16,18 @@ public struct ExtendedFileMetadata {
     public let isDirectory: Bool
     public let dimensions: String?
     
+    private static let byteFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.countStyle = .file
+        return f
+    }()
+    
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "d MMM yyyy, HH:mm"
+        return f
+    }()
+    
     public init(url: URL) {
         self.name = url.lastPathComponent
         self.path = url.path
@@ -25,18 +37,12 @@ public struct ExtendedFileMetadata {
         
         let exact = (attrs[.size] as? Int64) ?? 0
         self.exactBytes = exact
-        
-        let byteFormatter = ByteCountFormatter()
-        byteFormatter.countStyle = .file
-        self.sizeFormatted = byteFormatter.string(fromByteCount: exact)
-        
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "d MMM yyyy, HH:mm"
+        self.sizeFormatted = Self.byteFormatter.string(fromByteCount: exact)
         
         let created = attrs[.creationDate] as? Date ?? Date()
         let modified = attrs[.modificationDate] as? Date ?? Date()
-        self.dateCreated = dateFormatter.string(from: created)
-        self.dateModified = dateFormatter.string(from: modified)
+        self.dateCreated = Self.dateFormatter.string(from: created)
+        self.dateModified = Self.dateFormatter.string(from: modified)
         
         let posix = (attrs[.posixPermissions] as? NSNumber)?.intValue ?? 0o644
         self.permissions = String(format: "%o", posix)
@@ -60,7 +66,7 @@ public struct ExtendedFileMetadata {
     }
 }
 
-public enum InspectorContentType {
+public enum InspectorContentType: Sendable {
     case image
     case pdf
     case spreadsheet
@@ -74,7 +80,7 @@ public enum InspectorContentType {
     case generic
 }
 
-public enum PhotoOrganizerAction {
+public enum PhotoOrganizerAction: Sendable {
     case trashed(originalURL: URL)
     case picked(originalURL: URL, pickedURL: URL)
 }
@@ -85,7 +91,7 @@ public class SharedInspectorState: ObservableObject {
     public static let left = SharedInspectorState()
     public static let right = SharedInspectorState()
     
-    public static let imageExtensions = ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "tiff", "heic", "ico", "psd", "dng", "cr2", "nef", "arw", "raw"]
+    public nonisolated static let imageExtensions: [String] = ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "tiff", "heic", "ico", "psd", "dng", "cr2", "nef", "arw", "raw"]
     
     @Published public var currentURL: URL? {
         didSet {
@@ -110,6 +116,7 @@ public class SharedInspectorState: ObservableObject {
     @Published public var undoStack: [PhotoOrganizerAction] = []
     
     private var bannerTask: Task<Void, Never>?
+    private var previewLoadTask: Task<Void, Never>?
     
     // Remote Scroll Channel
     @Published public var scrollDeltaY: CGFloat = 0
@@ -250,7 +257,7 @@ public class SharedInspectorState: ObservableObject {
         if idx + 1 < siblingImageURLs.count {
             let nextURL = siblingImageURLs[idx + 1]
             self.currentURL = nextURL
-            NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: nextURL)
+            NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: self, userInfo: ["url": nextURL])
         } else {
             showBanner("Reached last image")
         }
@@ -262,7 +269,7 @@ public class SharedInspectorState: ObservableObject {
         if idx > 0 {
             let prevURL = siblingImageURLs[idx - 1]
             self.currentURL = prevURL
-            NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: prevURL)
+            NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: self, userInfo: ["url": prevURL])
         } else {
             showBanner("At first image")
         }
@@ -287,7 +294,7 @@ public class SharedInspectorState: ObservableObject {
             
             // Advance to next image
             advanceAfterRemoval(of: url)
-            NotificationCenter.default.post(name: .flashbrowseReloadDirectory, object: nil)
+            NotificationCenter.default.post(name: .flashbrowseReloadDirectory, object: self)
         } catch {
             showBanner("⚠️ Failed to pick: \(error.localizedDescription)")
         }
@@ -303,7 +310,7 @@ public class SharedInspectorState: ObservableObject {
             
             // Advance to next image
             advanceAfterRemoval(of: url)
-            NotificationCenter.default.post(name: .flashbrowseReloadDirectory, object: nil)
+            NotificationCenter.default.post(name: .flashbrowseReloadDirectory, object: self)
         } catch {
             showBanner("⚠️ Failed to trash: \(error.localizedDescription)")
         }
@@ -315,11 +322,11 @@ public class SharedInspectorState: ObservableObject {
             if idx < siblingImageURLs.count {
                 let nextURL = siblingImageURLs[idx]
                 self.currentURL = nextURL
-                NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: nextURL)
+                NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: self, userInfo: ["url": nextURL])
             } else if !siblingImageURLs.isEmpty {
                 let prevURL = siblingImageURLs.last!
                 self.currentURL = prevURL
-                NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: prevURL)
+                NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: self, userInfo: ["url": prevURL])
             } else {
                 self.currentURL = nil
             }
@@ -338,8 +345,8 @@ public class SharedInspectorState: ObservableObject {
                     scanSiblingImages(for: originalURL)
                     self.currentURL = originalURL
                     showBanner("↩️ Restored \(originalURL.lastPathComponent)")
-                    NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: originalURL)
-                    NotificationCenter.default.post(name: .flashbrowseReloadDirectory, object: nil)
+                    NotificationCenter.default.post(name: .flashbrowseInspectorSelectedURL, object: self, userInfo: ["url": originalURL])
+                    NotificationCenter.default.post(name: .flashbrowseReloadDirectory, object: self)
                 }
             } catch {
                 showBanner("⚠️ Undo failed: \(error.localizedDescription)")
@@ -351,6 +358,8 @@ public class SharedInspectorState: ObservableObject {
     }
     
     private func loadPreview() {
+        previewLoadTask?.cancel()
+        
         guard let url = currentURL else {
             metadata = nil
             contentType = .generic
@@ -360,137 +369,218 @@ public class SharedInspectorState: ObservableObject {
             return
         }
         
-        self.metadata = ExtendedFileMetadata(url: url)
-        self.parsedTableRows = []
-        
-        var isDir: ObjCBool = false
-        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
-            contentType = .folder
-            textContent = nil
-            previewImage = nil
-            return
-        }
-        
-        let ext = url.pathExtension.lowercased()
-        
-        // 1. PDF Documents
-        if ext == "pdf" {
-            self.contentType = .pdf
-            self.textContent = nil
-            self.previewImage = nil
-            return
-        }
-        
-        // 2. Spreadsheet Documents (Excel .xlsx, .xls, Numbers, CSV, TSV)
-        if ["xlsx", "xls", "numbers", "csv", "tsv", "tab"].contains(ext) {
-            self.contentType = .spreadsheet
-            self.previewImage = nil
+        previewLoadTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self = self else { return }
+            let meta = ExtendedFileMetadata(url: url)
             
-            // For CSV/TSV: parse fast structured table preview
-            if ["csv", "tsv", "tab"].contains(ext) {
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        guard self.currentURL == url else { return }
+                        self.metadata = meta
+                        self.contentType = .folder
+                        self.textContent = nil
+                        self.previewImage = nil
+                        self.parsedTableRows = []
+                    }
+                }
+                return
+            }
+            
+            let ext = url.pathExtension.lowercased()
+            
+            // 1. PDF Documents
+            if ext == "pdf" {
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        guard self.currentURL == url else { return }
+                        self.metadata = meta
+                        self.contentType = .pdf
+                        self.textContent = nil
+                        self.previewImage = nil
+                        self.parsedTableRows = []
+                    }
+                }
+                return
+            }
+            
+            // 2. Spreadsheet Documents (Excel .xlsx, .xls, Numbers, CSV, TSV)
+            if ["xlsx", "xls", "numbers", "csv", "tsv", "tab"].contains(ext) {
+                var rows: [[String]] = []
+                var text: String? = nil
+                if ["csv", "tsv", "tab"].contains(ext) {
+                    if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
+                       let str = String(data: data.prefix(500000), encoding: .utf8) {
+                        let delimiter: Character = (ext == "csv") ? "," : "\t"
+                        rows = str.components(separatedBy: "\n").prefix(200).compactMap { line -> [String]? in
+                            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if trimmed.isEmpty { return nil }
+                            return trimmed.split(separator: delimiter, omittingEmptySubsequences: false).map(String.init)
+                        }
+                        text = str
+                    }
+                }
+                let finalRows = rows
+                let finalText = text
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        guard self.currentURL == url else { return }
+                        self.metadata = meta
+                        self.contentType = .spreadsheet
+                        self.parsedTableRows = finalRows
+                        self.textContent = finalText
+                        self.previewImage = nil
+                    }
+                }
+                return
+            }
+            
+            // 3. Office & Rich Documents (Word .docx, .doc, Pages, Keynote, PPTX, RTF)
+            if ["docx", "doc", "pages", "rtf", "rtfd", "odt", "pptx", "ppt", "keynote"].contains(ext) {
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        guard self.currentURL == url else { return }
+                        self.metadata = meta
+                        self.contentType = .officeDoc
+                        self.textContent = nil
+                        self.previewImage = nil
+                        self.parsedTableRows = []
+                    }
+                }
+                return
+            }
+            
+            // 4. Audio & Video Media
+            if ["mp4", "mov", "m4v", "m4a", "mp3", "wav", "flac", "aac", "avi", "mkv", "webm"].contains(ext) {
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        guard self.currentURL == url else { return }
+                        self.metadata = meta
+                        self.contentType = .media
+                        self.textContent = nil
+                        self.previewImage = nil
+                        self.parsedTableRows = []
+                    }
+                }
+                return
+            }
+            
+            // 5. Image Preview
+            if Self.imageExtensions.contains(ext) {
+                if let img = NSImage(contentsOf: url) {
+                    if !Task.isCancelled {
+                        await MainActor.run {
+                            guard self.currentURL == url else { return }
+                            self.metadata = meta
+                            self.contentType = .image
+                            self.previewImage = img
+                            self.textContent = nil
+                            self.parsedTableRows = []
+                            if !self.siblingImageURLs.contains(url) {
+                                self.scanSiblingImages(for: url)
+                            }
+                        }
+                    }
+                    return
+                }
+            }
+            
+            // 6. HTML Preview
+            if ["html", "htm", "xhtml"].contains(ext) {
+                if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
+                   let str = String(data: data.prefix(1000000), encoding: .utf8) {
+                    if !Task.isCancelled {
+                        await MainActor.run {
+                            guard self.currentURL == url else { return }
+                            self.metadata = meta
+                            self.contentType = .html
+                            self.textContent = str
+                            self.previewImage = nil
+                            self.parsedTableRows = []
+                        }
+                    }
+                    return
+                }
+            }
+            
+            // 7. Markdown Preview
+            if ["md", "markdown", "mdown", "mkdn"].contains(ext) {
                 if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
                    let str = String(data: data.prefix(500000), encoding: .utf8) {
-                    let delimiter: Character = (ext == "csv") ? "," : "\t"
-                    let rows = str.components(separatedBy: "\n").prefix(200).compactMap { line -> [String]? in
-                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if trimmed.isEmpty { return nil }
-                        return trimmed.split(separator: delimiter, omittingEmptySubsequences: false).map(String.init)
+                    if !Task.isCancelled {
+                        await MainActor.run {
+                            guard self.currentURL == url else { return }
+                            self.metadata = meta
+                            self.contentType = .markdown
+                            self.textContent = str
+                            self.previewImage = nil
+                            self.parsedTableRows = []
+                        }
                     }
-                    self.parsedTableRows = rows
-                    self.textContent = str
+                    return
                 }
             }
-            return
-        }
-        
-        // 3. Office & Rich Documents (Word .docx, .doc, Pages, Keynote, PPTX, RTF)
-        if ["docx", "doc", "pages", "rtf", "rtfd", "odt", "pptx", "ppt", "keynote"].contains(ext) {
-            self.contentType = .officeDoc
-            self.textContent = nil
-            self.previewImage = nil
-            return
-        }
-        
-        // 4. Audio & Video Media
-        if ["mp4", "mov", "m4v", "m4a", "mp3", "wav", "flac", "aac", "avi", "mkv", "webm"].contains(ext) {
-            self.contentType = .media
-            self.textContent = nil
-            self.previewImage = nil
-            return
-        }
-        
-        // 5. Image Preview
-        if Self.imageExtensions.contains(ext) {
-            if let img = NSImage(contentsOf: url) {
-                self.contentType = .image
-                self.previewImage = img
-                self.textContent = nil
-                if !siblingImageURLs.contains(url) {
-                    scanSiblingImages(for: url)
+            
+            // 8. Code / Script / Text Preview (VS Code Highlighting)
+            let codeExtensions: Set<String> = [
+                "swift", "rs", "py", "pyw", "ipynb", "r", "rmd", "smk", "c", "cpp", "cc", "cxx", "c++", "h", "hpp", "h++",
+                "js", "ts", "jsx", "tsx", "mjs", "cjs", "json", "jsonl", "geojson", "toml", "yaml", "yml",
+                "sh", "zsh", "bash", "fish", "command", "go", "java", "kt", "kts", "scala", "lua", "perl", "pl", "pm", "rb", "php",
+                "css", "scss", "sass", "less", "sql", "xml", "plist", "log", "txt", "text", "vcf", "bed", "gtf", "gff", "gff3",
+                "fasta", "fa", "fna", "faa", "dockerfile", "makefile", "env", "ini", "conf", "cfg", "diff", "patch"
+            ]
+            
+            let filenameLower = url.lastPathComponent.lowercased()
+            let isCommonCodeFile = filenameLower == "makefile" || filenameLower.hasPrefix("makefile.") ||
+                                   filenameLower == "dockerfile" || filenameLower.hasPrefix("dockerfile.") ||
+                                   filenameLower == "snakefile" || filenameLower.hasPrefix(".bash") ||
+                                   filenameLower.hasPrefix(".zsh") || filenameLower.hasPrefix(".env") ||
+                                   filenameLower == ".gitignore" || filenameLower == ".dockerignore"
+            
+            if codeExtensions.contains(ext) || isCommonCodeFile {
+                if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
+                   let str = String(data: data.prefix(2_000_000), encoding: .utf8) {
+                    if !Task.isCancelled {
+                        await MainActor.run {
+                            guard self.currentURL == url else { return }
+                            self.metadata = meta
+                            self.contentType = .code
+                            self.textContent = str
+                            self.previewImage = nil
+                            self.parsedTableRows = []
+                        }
+                    }
+                    return
+                }
+            }
+            
+            // Fallback: Check if smaller unknown file (< 500KB) is plain UTF-8 text / script
+            if let data = try? Data(contentsOf: url, options: .mappedIfSafe), data.count < 500_000,
+               let str = String(data: data, encoding: .utf8), !str.contains("\0") {
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        guard self.currentURL == url else { return }
+                        self.metadata = meta
+                        self.contentType = .code
+                        self.textContent = str
+                        self.previewImage = nil
+                        self.parsedTableRows = []
+                    }
                 }
                 return
             }
-        }
-        
-        // 6. HTML Preview
-        if ["html", "htm", "xhtml"].contains(ext) {
-            if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
-               let str = String(data: data.prefix(1000000), encoding: .utf8) {
-                self.contentType = .html
-                self.textContent = str
-                self.previewImage = nil
-                return
+            
+            if !Task.isCancelled {
+                await MainActor.run {
+                    guard self.currentURL == url else { return }
+                    self.metadata = meta
+                    self.contentType = .generic
+                    self.textContent = nil
+                    self.previewImage = nil
+                    self.parsedTableRows = []
+                }
             }
         }
-        
-        // 7. Markdown Preview
-        if ["md", "markdown", "mdown", "mkdn"].contains(ext) {
-            if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
-               let str = String(data: data.prefix(500000), encoding: .utf8) {
-                self.contentType = .markdown
-                self.textContent = str
-                self.previewImage = nil
-                return
-            }
-        }
-        
-        // 8. Code / Script / Text Preview (VS Code Highlighting)
-        let codeExtensions: Set<String> = [
-            "swift", "rs", "py", "pyw", "ipynb", "r", "rmd", "smk", "c", "cpp", "cc", "cxx", "c++", "h", "hpp", "h++",
-            "js", "ts", "jsx", "tsx", "mjs", "cjs", "json", "jsonl", "geojson", "toml", "yaml", "yml",
-            "sh", "zsh", "bash", "fish", "command", "go", "java", "kt", "kts", "scala", "lua", "perl", "pl", "pm", "rb", "php",
-            "css", "scss", "sass", "less", "sql", "xml", "plist", "log", "txt", "text", "vcf", "bed", "gtf", "gff", "gff3",
-            "fasta", "fa", "fna", "faa", "dockerfile", "makefile", "env", "ini", "conf", "cfg", "diff", "patch"
-        ]
-        
-        let filenameLower = url.lastPathComponent.lowercased()
-        let isCommonCodeFile = filenameLower == "makefile" || filenameLower.hasPrefix("makefile.") ||
-                               filenameLower == "dockerfile" || filenameLower.hasPrefix("dockerfile.") ||
-                               filenameLower == "snakefile" || filenameLower.hasPrefix(".bash") ||
-                               filenameLower.hasPrefix(".zsh") || filenameLower.hasPrefix(".env") ||
-                               filenameLower == ".gitignore" || filenameLower == ".dockerignore"
-        
-        if codeExtensions.contains(ext) || isCommonCodeFile {
-            if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
-               let str = String(data: data.prefix(2_000_000), encoding: .utf8) {
-                self.contentType = .code
-                self.textContent = str
-                self.previewImage = nil
-                return
-            }
-        }
-        
-        // Fallback: Check if smaller unknown file (< 500KB) is plain UTF-8 text / script
-        if let data = try? Data(contentsOf: url, options: .mappedIfSafe), data.count < 500_000,
-           let str = String(data: data, encoding: .utf8), !str.contains("\0") {
-            self.contentType = .code
-            self.textContent = str
-            self.previewImage = nil
-            return
-        }
-        
-        self.contentType = .generic
-        self.textContent = nil
-        self.previewImage = nil
     }
 }

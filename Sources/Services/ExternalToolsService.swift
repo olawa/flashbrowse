@@ -108,29 +108,35 @@ public class ExternalToolsService: ObservableObject {
     
     /// Launch or send track to IGV
     public func openInIGV(urls: [URL]) {
-        let paths = urls.map { $0.path }.joined(separator: ",")
-        
-        // 1. Try sending via IGV HTTP Port 60151 first if IGV is running
-        if let portURL = URL(string: "http://127.0.0.1:60151/load?file=\(paths.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? paths)") {
-            var request = URLRequest(url: portURL)
-            request.timeoutInterval = 1.0
-            URLSession.shared.dataTask(with: request) { _, response, _ in
-                if let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200 {
-                    return
-                }
-                // Fallback: Launch IGV via open -a IGV
-                DispatchQueue.main.async {
-                    let process = Process()
-                    process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                    process.arguments = ["-a", "IGV", "--args"] + urls.map { $0.path }
-                    do {
-                        try process.run()
-                    } catch {
-                        // Handle/ignore process execution error safely without crashing
-                    }
-                }
-            }.resume()
+        let launchDesktopIGV = {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = ["-a", "IGV", "--args"] + urls.map { $0.path }
+            do {
+                try process.run()
+            } catch {
+                // Handle/ignore process execution error safely without crashing
+            }
         }
+        
+        let paths = urls.map { $0.path }.joined(separator: ",")
+        guard let encoded = paths.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let portURL = URL(string: "http://127.0.0.1:60151/load?file=\(encoded)") else {
+            launchDesktopIGV()
+            return
+        }
+        
+        var request = URLRequest(url: portURL)
+        request.timeoutInterval = 1.0
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            if error == nil, let httpResp = response as? HTTPURLResponse, httpResp.statusCode == 200 {
+                return
+            }
+            // Fallback: Launch IGV application directly
+            DispatchQueue.main.async {
+                launchDesktopIGV()
+            }
+        }.resume()
     }
     
     /// Check if a file is supported by genomics viewers
