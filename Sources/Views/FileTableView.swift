@@ -113,37 +113,49 @@ public struct FileTableView: View {
     
     // MARK: - List View (Detailed Table)
     private var listView: some View {
-        VStack(spacing: 0) {
-            // Sort Header Bar (Ubuntu Nautilus Style)
-            HStack(spacing: 0) {
-                headerButton("Name", field: .name, width: nil, alignment: .leading)
-                Divider().frame(height: 14)
-                headerButton("Size", field: .size, width: 95, alignment: .trailing)
-                Divider().frame(height: 14)
-                headerButton("Modified", field: .dateModified, width: 140, alignment: .leading)
-                Divider().frame(height: 14)
-                headerButton("Type", field: .kind, width: 120, alignment: .leading)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.8))
-            .overlay(
-                Rectangle()
-                    .frame(height: 0.5)
-                    .foregroundColor(Color(nsColor: .separatorColor)),
-                alignment: .bottom
-            )
+        GeometryReader { geo in
+            let isCompact = geo.size.width < 520
+            let isUltraCompact = geo.size.width < 380
             
-            // Scrollable List
-            ScrollView {
-                LazyVStack(spacing: 1) {
-                    ForEach(state.filteredItems) { item in
-                        listRow(for: item)
-                            .id(item.url)
+            VStack(spacing: 0) {
+                // Sort Header Bar (Ubuntu Nautilus Style)
+                HStack(spacing: 0) {
+                    headerButton("Name", field: .name, width: nil, alignment: .leading)
+                    
+                    Divider().frame(height: 14)
+                    headerButton("Size", field: .size, width: isCompact ? 75 : 90, alignment: .trailing)
+                    
+                    if !isUltraCompact {
+                        Divider().frame(height: 14)
+                        headerButton("Modified", field: .dateModified, width: isCompact ? 105 : 135, alignment: .leading)
+                    }
+                    
+                    if !isCompact {
+                        Divider().frame(height: 14)
+                        headerButton("Type", field: .kind, width: 110, alignment: .leading)
                     }
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, isCompact ? 8 : 12)
+                .padding(.vertical, 5)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.8))
+                .overlay(
+                    Rectangle()
+                        .frame(height: 0.5)
+                        .foregroundColor(Color(nsColor: .separatorColor)),
+                    alignment: .bottom
+                )
+                
+                // Scrollable List
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(state.filteredItems) { item in
+                            listRow(for: item, isCompact: isCompact, isUltraCompact: isUltraCompact)
+                                .id(item.url)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 4)
+                }
             }
         }
     }
@@ -169,36 +181,36 @@ public struct FileTableView: View {
                 }
             }
             .frame(width: width, alignment: alignment)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 4)
         }
         .buttonStyle(.plain)
     }
     
     @ViewBuilder
-    private func listRow(for item: FileItem) -> some View {
+    private func listRow(for item: FileItem, isCompact: Bool, isUltraCompact: Bool) -> some View {
         let isSelected = state.selectedURLs.contains(item.url)
         let isHovered = hoveredURL == item.url
         
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             // Icon + Name
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ZStack {
                     if item.isDirectory {
                         Image(systemName: "folder.fill")
-                            .font(.system(size: 16))
+                            .font(.system(size: 15))
                             .foregroundColor(Color.flashbrowseAccent) // Ubuntu Orange
                     } else {
                         Image(systemName: item.sfSymbolName)
-                            .font(.system(size: 15))
+                            .font(.system(size: 14))
                             .foregroundColor(item.categoryColor)
                     }
                 }
-                .frame(width: 22, height: 22)
+                .frame(width: 20, height: 20)
                 
                 if state.renamingURL == item.url {
                     TextField("", text: $state.renameText)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(Color(nsColor: .textBackgroundColor))
@@ -219,18 +231,18 @@ public struct FileTableView: View {
                         }
                 } else {
                     Text(item.name)
-                        .font(.system(size: 13, weight: item.isDirectory ? .medium : .regular))
+                        .font(.system(size: 12, weight: item.isDirectory ? .medium : .regular))
                         .foregroundColor(isSelected ? .white : (item.isHidden ? .secondary : .primary))
                         .lineLimit(1)
                 }
                 
                 if item.isSymlink {
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 9))
+                        .font(.system(size: 8))
                         .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
                 }
                 
-                Spacer()
+                Spacer(minLength: 4)
             }
             
             // Size Column with Fixed-Scale Indicator for Large Files (>= 50 MB, 1 GB = 100%)
@@ -245,35 +257,40 @@ public struct FileTableView: View {
                             ? Color.white.opacity(0.3)
                             : (isGigabyte ? Color.flashbrowseAccent.opacity(0.25) : Color.cyan.opacity(0.18))
                         )
-                        .frame(width: 90 * proportion, height: 18)
+                        .frame(width: (isCompact ? 70 : 85) * proportion, height: 16)
                 }
                 
                 Text(item.formattedSize)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(isSelected ? .white : .secondary)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, 2)
             }
-            .frame(width: 95, alignment: .trailing)
-            .padding(.trailing, 4)
+            .frame(width: isCompact ? 75 : 90, alignment: .trailing)
+            .padding(.trailing, 2)
             
             // Date Modified
-            Text(item.formattedDate)
-                .font(.system(size: 12))
-                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                .frame(width: 140, alignment: .leading)
-                .padding(.horizontal, 4)
+            if !isUltraCompact {
+                Text(isCompact ? item.shortFormattedDate : item.formattedDate)
+                    .font(.system(size: 11))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                    .frame(width: isCompact ? 105 : 135, alignment: .leading)
+                    .padding(.horizontal, 2)
+                    .lineLimit(1)
+            }
             
-            // Kind
-            Text(item.kindDescription)
-                .font(.system(size: 12))
-                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                .frame(width: 120, alignment: .leading)
-                .lineLimit(1)
+            // Kind (only on wider views)
+            if !isCompact {
+                Text(item.kindDescription)
+                    .font(.system(size: 11))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                    .frame(width: 110, alignment: .leading)
+                    .lineLimit(1)
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.horizontal, isCompact ? 6 : 8)
+        .padding(.vertical, 4)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: 5)
                 .fill(isSelected
                       ? Color.flashbrowseAccent
                       : (isHovered ? Color.flashbrowseAccent.opacity(0.12) : Color.clear))

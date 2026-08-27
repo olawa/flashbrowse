@@ -300,165 +300,181 @@ public struct IndexBrowserView: View {
     
     // MARK: - Right Files Pane
     private var filesListPane: some View {
-        VStack(spacing: 0) {
-            // Header
-            let showDirectoryColumn = indexService.selectedDirectories.count != 1
-            HStack(spacing: 8) {
-                Text("FILE NAME")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                if showDirectoryColumn {
-                    Text("FOLDER")
+        GeometryReader { geo in
+            let isCompact = geo.size.width < 500
+            let isUltraCompact = geo.size.width < 380
+            let showDirectoryColumn = indexService.selectedDirectories.count != 1 && !isUltraCompact
+            
+            VStack(spacing: 0) {
+                // Header
+                HStack(spacing: 6) {
+                    Text("FILE NAME")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.secondary)
-                        .frame(width: 120, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    if showDirectoryColumn {
+                        Text("FOLDER")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .frame(width: isCompact ? 90 : 120, alignment: .leading)
+                    }
+                    
+                    Text("SIZE")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.secondary)
+                        .frame(width: isCompact ? 75 : 90, alignment: .trailing)
+                    
+                    if !isUltraCompact {
+                        Text("MODIFIED")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .frame(width: isCompact ? 105 : 135, alignment: .leading)
+                    }
                 }
+                .padding(.horizontal, isCompact ? 8 : 12)
+                .padding(.vertical, 5)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
                 
-                Text("SIZE")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 90, alignment: .trailing)
+                Divider()
                 
-                Text("MODIFIED")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 140, alignment: .leading)
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(filteredItemsInSelectedGroups) { item in
+                            indexFileRow(item: item, isCompact: isCompact, isUltraCompact: isUltraCompact, showDirectoryColumn: showDirectoryColumn)
+                        }
+                    }
+                    .padding(6)
+                }
+                .background(Color(nsColor: .textBackgroundColor))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        }
+    }
+    
+    // MARK: - File Row
+    @ViewBuilder
+    private func indexFileRow(item: FileItem, isCompact: Bool, isUltraCompact: Bool, showDirectoryColumn: Bool) -> some View {
+        let isHovered = hoveredURL == item.url
+        let isSelected = selectedFileURLs.contains(item.url)
+        
+        HStack(spacing: 6) {
+            Image(systemName: item.sfSymbolName)
+                .foregroundColor(item.categoryColor)
+                .font(.system(size: 13))
+                .frame(width: 18)
+            
+            Text(item.name)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(isSelected ? .white : .primary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            if showDirectoryColumn {
+                Text(item.url.deletingLastPathComponent().lastPathComponent)
+                    .font(.system(size: 10))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                    .lineLimit(1)
+                    .frame(width: isCompact ? 90 : 120, alignment: .leading)
+            }
+            
+            Text(item.formattedSize)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(isSelected ? .white : .secondary)
+                .frame(width: isCompact ? 75 : 90, alignment: .trailing)
+            
+            if !isUltraCompact {
+                Text(isCompact ? item.shortFormattedDate : item.formattedDate)
+                    .font(.system(size: 11))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                    .frame(width: isCompact ? 105 : 135, alignment: .leading)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, isCompact ? 6 : 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 5)
+                .fill(isSelected ? Color.flashbrowseAccent : (isHovered ? Color.flashbrowseAccent.opacity(0.12) : Color.clear))
+        )
+        .contentShape(Rectangle())
+        // Drag & Drop
+        .onDrag {
+            if !selectedFileURLs.contains(item.url) {
+                selectedFileURLs = [item.url]
+            }
+            return NSItemProvider(object: item.url as NSURL)
+        }
+        // Smart Hover Preview
+        .onHover { hovering in
+            if hovering {
+                hoveredURL = item.url
+                if navState.smartHoverPreview && NavigationState.isSmartHoverPreviewCandidate(item: item) {
+                    navState.scheduleInspectorUpdate(url: item.url)
+                }
+            } else if hoveredURL == item.url {
+                hoveredURL = nil
+            }
+        }
+        .onTapGesture {
+            let isShift = NSEvent.modifierFlags.contains(.shift)
+            let isCmd = NSEvent.modifierFlags.contains(.command)
+            
+            if isCmd {
+                if selectedFileURLs.contains(item.url) {
+                    selectedFileURLs.remove(item.url)
+                } else {
+                    selectedFileURLs.insert(item.url)
+                }
+            } else if isShift, let last = selectedFileURLs.first,
+                      let lastIdx = filteredItemsInSelectedGroups.firstIndex(where: { $0.url == last }),
+                      let curIdx = filteredItemsInSelectedGroups.firstIndex(where: { $0.url == item.url }) {
+                let start = min(lastIdx, curIdx)
+                let end = max(lastIdx, curIdx)
+                let range = filteredItemsInSelectedGroups[start...end].map { $0.url }
+                selectedFileURLs = Set(range)
+            } else {
+                selectedFileURLs = [item.url]
+            }
+        }
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                FileSystemService.shared.openItem(url: item.url)
+            }
+        )
+        .contextMenu {
+            let targets = selectedFileURLs.contains(item.url) ? Array(selectedFileURLs) : [item.url]
+            
+            if toolsService.hasRsnap && ExternalToolsService.isGenomicsFile(url: item.url) {
+                Button(action: {
+                    toolsService.openInRsnap(urls: targets)
+                }) {
+                    Label(targets.count > 1 ? "Open \(targets.count) Files in rsnap" : "Open in rsnap", systemImage: "waveform.path.ecg")
+                }
+            }
+            
+            if toolsService.hasIGV && ExternalToolsService.isGenomicsFile(url: item.url) {
+                Button(action: {
+                    toolsService.openInIGV(urls: targets)
+                }) {
+                    Label(targets.count > 1 ? "Load \(targets.count) Files into IGV" : "Load into IGV", systemImage: "dna")
+                }
+            }
             
             Divider()
             
-            ScrollView {
-                LazyVStack(spacing: 1) {
-                    ForEach(filteredItemsInSelectedGroups) { item in
-                        let isHovered = hoveredURL == item.url
-                        let isSelected = selectedFileURLs.contains(item.url)
-                        
-                        HStack(spacing: 8) {
-                            Image(systemName: item.sfSymbolName)
-                                .foregroundColor(item.categoryColor)
-                                .font(.system(size: 14))
-                                .frame(width: 20)
-                            
-                            Text(item.name)
-                                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                                .foregroundColor(isSelected ? .white : .primary)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            
-                            if showDirectoryColumn {
-                                Text(item.url.deletingLastPathComponent().lastPathComponent)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                                    .lineLimit(1)
-                                    .frame(width: 120, alignment: .leading)
-                            }
-                            
-                            Text(item.formattedSize)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(isSelected ? .white : .secondary)
-                                .frame(width: 90, alignment: .trailing)
-                            
-                            Text(item.formattedDate)
-                                .font(.system(size: 11))
-                                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                                .frame(width: 140, alignment: .leading)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isSelected ? Color.flashbrowseAccent : (isHovered ? Color.flashbrowseAccent.opacity(0.12) : Color.clear))
-                        )
-                        .contentShape(Rectangle())
-                        // Drag & Drop
-                        .onDrag {
-                            if !selectedFileURLs.contains(item.url) {
-                                selectedFileURLs = [item.url]
-                            }
-                            return NSItemProvider(object: item.url as NSURL)
-                        }
-                        // Smart Hover Preview
-                        .onHover { hovering in
-                            if hovering {
-                                hoveredURL = item.url
-                                if navState.smartHoverPreview && NavigationState.isSmartHoverPreviewCandidate(item: item) {
-                                    navState.scheduleInspectorUpdate(url: item.url)
-                                }
-                            } else if hoveredURL == item.url {
-                                hoveredURL = nil
-                            }
-                        }
-                        .onTapGesture {
-                            let isShift = NSEvent.modifierFlags.contains(.shift)
-                            let isCmd = NSEvent.modifierFlags.contains(.command)
-                            
-                            if isCmd {
-                                if selectedFileURLs.contains(item.url) {
-                                    selectedFileURLs.remove(item.url)
-                                } else {
-                                    selectedFileURLs.insert(item.url)
-                                }
-                            } else if isShift, let last = selectedFileURLs.first,
-                                      let lastIdx = filteredItemsInSelectedGroups.firstIndex(where: { $0.url == last }),
-                                      let curIdx = filteredItemsInSelectedGroups.firstIndex(where: { $0.url == item.url }) {
-                                let start = min(lastIdx, curIdx)
-                                let end = max(lastIdx, curIdx)
-                                let range = filteredItemsInSelectedGroups[start...end].map { $0.url }
-                                selectedFileURLs = Set(range)
-                            } else {
-                                selectedFileURLs = [item.url]
-                            }
-                        }
-                        .simultaneousGesture(
-                            TapGesture(count: 2).onEnded {
-                                FileSystemService.shared.openItem(url: item.url)
-                            }
-                        )
-                        .contextMenu {
-                            let targets = selectedFileURLs.contains(item.url) ? Array(selectedFileURLs) : [item.url]
-                            
-                            if toolsService.hasRsnap && ExternalToolsService.isGenomicsFile(url: item.url) {
-                                Button(action: {
-                                    toolsService.openInRsnap(urls: targets)
-                                }) {
-                                    Label(targets.count > 1 ? "Open \(targets.count) Files in rsnap" : "Open in rsnap", systemImage: "waveform.path.ecg")
-                                }
-                            }
-                            
-                            if toolsService.hasIGV && ExternalToolsService.isGenomicsFile(url: item.url) {
-                                Button(action: {
-                                    toolsService.openInIGV(urls: targets)
-                                }) {
-                                    Label(targets.count > 1 ? "Load \(targets.count) Files into IGV" : "Load into IGV", systemImage: "dna")
-                                }
-                            }
-                            
-                            Divider()
-                            
-                            Button("Open File") {
-                                FileSystemService.shared.openItem(url: item.url)
-                            }
-                            Button("Quick Look (Space)") {
-                                QuickLookBridge.shared.toggleQuickLook(for: item.url)
-                            }
-                            Divider()
-                            Button("Reveal in Finder") {
-                                FileSystemService.shared.revealInFinder(url: item.url)
-                            }
-                            Button("Copy Path") {
-                                FileSystemService.shared.copyPathToClipboard(urls: targets)
-                            }
-                        }
-                    }
-                }
-                .padding(6)
+            Button("Open File") {
+                FileSystemService.shared.openItem(url: item.url)
             }
-            .background(Color(nsColor: .textBackgroundColor))
+            Button("Quick Look (Space)") {
+                QuickLookBridge.shared.toggleQuickLook(for: item.url)
+            }
+            Divider()
+            Button("Reveal in Finder") {
+                FileSystemService.shared.revealInFinder(url: item.url)
+            }
+            Button("Copy Path") {
+                FileSystemService.shared.copyPathToClipboard(urls: targets)
+            }
         }
     }
 }

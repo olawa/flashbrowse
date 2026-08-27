@@ -161,24 +161,24 @@ public struct BreadcrumbBarView: View {
             .help("Edit Path (Cmd+L)")
             
             // Search Bar with Scope Switcher
-            HStack(spacing: 4) {
+            HStack(spacing: 3) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundColor(.secondary)
                 
-                TextField(state.searchScope == .currentFolder ? "Search folder..." : "Search subfolders...", text: $state.searchQuery)
+                TextField(state.searchScope == .currentFolder ? "Search..." : "Subfolders...", text: $state.searchQuery)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(.system(size: 11))
                     .focused($isSearchFocused)
-                    .frame(width: 115)
+                    .frame(minWidth: 55, idealWidth: 85, maxWidth: 115)
                 
                 // Search Scope Toggle Button
                 Button(action: {
                     state.searchScope = (state.searchScope == .currentFolder) ? .includeSubfolders : .currentFolder
                 }) {
                     Image(systemName: state.searchScope == .includeSubfolders ? "arrow.triangle.branch" : "folder")
-                        .font(.system(size: 10, weight: .bold))
-                        .padding(.horizontal, 4)
+                        .font(.system(size: 9, weight: .bold))
+                        .padding(.horizontal, 3)
                         .padding(.vertical, 2)
                         .background(state.searchScope == .includeSubfolders ? Color.flashbrowseAccent : Color.clear)
                         .foregroundColor(state.searchScope == .includeSubfolders ? .white : .secondary)
@@ -190,14 +190,14 @@ public struct BreadcrumbBarView: View {
                 if !state.searchQuery.isEmpty {
                     Button(action: { state.searchQuery = "" }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 11))
+                            .font(.system(size: 10))
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 6)
-            .frame(height: 28)
+            .padding(.horizontal, 5)
+            .frame(height: 26)
             .background(Color(nsColor: .controlBackgroundColor))
             .cornerRadius(6)
             .overlay(

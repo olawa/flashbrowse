@@ -1246,8 +1246,8 @@ public class InspectorWindowController: NSObject, NSWindowDelegate {
         let spacing: CGFloat = 6
         let totalWidth = screenFrame.width - spacing
         
-        // Browser on Left (52%), Inspector on Right (48%)
-        let mainWidth = floor(totalWidth * 0.52)
+        // 2/3 for Browser (67%), 1/3 for Inspector (33%)
+        let mainWidth = floor(totalWidth * 0.67)
         let mainRect = NSRect(
             x: screenFrame.minX,
             y: screenFrame.minY,

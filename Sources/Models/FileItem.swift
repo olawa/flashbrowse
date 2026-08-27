@@ -46,6 +46,12 @@ public struct FileItem: Identifiable, Hashable {
         return formatter
     }()
     
+    private static let shortDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d MMM HH:mm"
+        return formatter
+    }()
+    
     public var formattedSize: String {
         if isDirectory {
             if let count = itemCount {
@@ -60,6 +66,11 @@ public struct FileItem: Identifiable, Hashable {
     public var formattedDate: String {
         guard let date = dateModified else { return "--" }
         return FileItem.dateFormatter.string(from: date)
+    }
+    
+    public var shortFormattedDate: String {
+        guard let date = dateModified else { return "--" }
+        return FileItem.shortDateFormatter.string(from: date)
     }
     
     public init(url: URL, itemCount: Int? = nil) {

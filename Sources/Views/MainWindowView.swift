@@ -133,16 +133,10 @@ public struct MainWindowView: View {
                         terminalService.toggleTerminal()
                     }
                 }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "terminal.fill")
-                        if terminalService.isOpen {
-                            Text("Terminal")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                    }
-                    .foregroundColor(terminalService.isOpen ? Color.flashbrowseAccent : .primary)
+                    Image(systemName: terminalService.isOpen ? "terminal.fill" : "terminal")
+                        .foregroundColor(terminalService.isOpen ? Color.flashbrowseAccent : .primary)
                 }
-                .help("Toggle & Focus Integrated Terminal (Cmd+J)")
+                .help("Toggle Integrated Terminal (Cmd+J)")
                 
                 // Dual Pane Toggle (only in normal view)
                 if indexService.activeIndex == nil && !sshService.isRemoteBrowserOpen {
@@ -152,23 +146,15 @@ public struct MainWindowView: View {
                         Image(systemName: isDualPane ? "square.split.2x1.fill" : "square.split.2x1")
                             .foregroundColor(isDualPane ? Color.flashbrowseAccent : .primary)
                     }
-                    .help("Toggle Dual-Pane Split View (Cmd+D / F3)")
+                    .help("Toggle Dual-Pane View (Cmd+D / F3)")
                     
                     // Classic Commander Theme Toggle
                     Button(action: {
                         isCommanderMode.toggle()
                         if isCommanderMode { isDualPane = true }
                     }) {
-                        HStack(spacing: 3) {
-                            Image(systemName: "terminal")
-                            Text("Commander")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(isCommanderMode ? Color.cyan.opacity(0.2) : Color.clear)
-                        .foregroundColor(isCommanderMode ? Color.cyan : .primary)
-                        .cornerRadius(4)
+                        Image(systemName: isCommanderMode ? "slider.horizontal.2.square" : "slider.horizontal.2.square")
+                            .foregroundColor(isCommanderMode ? Color.cyan : .secondary)
                     }
                     .help("Toggle Classic Norton Commander Mode")
                 }
@@ -185,14 +171,8 @@ public struct MainWindowView: View {
                 Button(action: {
                     InspectorWindowController.shared.toggleWindow()
                 }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: inspectorState.isInspectorWindowOpen ? "display.2" : "sidebar.right")
-                        if inspectorState.isInspectorWindowOpen {
-                            Text("Inspector")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                    }
-                    .foregroundColor(inspectorState.isInspectorWindowOpen ? Color.flashbrowseAccent : .primary)
+                    Image(systemName: inspectorState.isInspectorWindowOpen ? "sidebar.right" : "sidebar.right")
+                        .foregroundColor(inspectorState.isInspectorWindowOpen ? Color.flashbrowseAccent : .primary)
                 }
                 .help("Toggle Inspector Companion / iPad Window (Cmd+I / Cmd+Option+I)")
             }
