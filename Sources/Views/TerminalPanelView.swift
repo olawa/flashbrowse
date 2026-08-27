@@ -241,6 +241,11 @@ public struct TerminalPanelView: View {
                         inputCommand = ""
                         terminalService.executeCommand(cmd)
                     }
+                    .onKeyPress(.tab) {
+                        let completed = terminalService.tabComplete(input: inputCommand, isRight: false)
+                        inputCommand = completed
+                        return .handled
+                    }
                     .onKeyPress(.upArrow) {
                         historyPrevious(isRight: false)
                         return .handled
@@ -308,6 +313,11 @@ public struct TerminalPanelView: View {
                         let cmd = rightInputCommand
                         rightInputCommand = ""
                         terminalService.executeRightCommand(cmd)
+                    }
+                    .onKeyPress(.tab) {
+                        let completed = terminalService.tabComplete(input: rightInputCommand, isRight: true)
+                        rightInputCommand = completed
+                        return .handled
                     }
                     .onKeyPress(.upArrow) {
                         historyPrevious(isRight: true)
