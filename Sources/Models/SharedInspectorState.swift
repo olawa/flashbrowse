@@ -82,6 +82,8 @@ public enum PhotoOrganizerAction {
 @MainActor
 public class SharedInspectorState: ObservableObject {
     public static let shared = SharedInspectorState()
+    public static let left = SharedInspectorState()
+    public static let right = SharedInspectorState()
     
     public static let imageExtensions = ["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "tiff", "heic", "ico", "psd", "dng", "cr2", "nef", "arw", "raw"]
     
@@ -131,7 +133,7 @@ public class SharedInspectorState: ObservableObject {
         !undoStack.isEmpty
     }
     
-    private init() {}
+    public init() {}
     
     public func toggleInspector() {
         if isInspectorDetached {

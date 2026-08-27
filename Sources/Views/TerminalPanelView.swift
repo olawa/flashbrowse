@@ -126,6 +126,27 @@ public struct TerminalPanelView: View {
                 .buttonStyle(.plain)
                 .help("Click to toggle automatic 2-way sync: 'cd <dir>' in terminal moves the browser, and browsing folders moves the terminal")
                 
+                // Dock Position Toggle (Bottom vs Right Side for Ultrawide)
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        terminalService.toggleDockPosition()
+                    }
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: terminalService.dockPosition == .right ? "rectangle.bottomthird.inset.filled" : "rectangle.righthalf.inset.filled")
+                            .font(.system(size: 10))
+                        Text(terminalService.dockPosition == .right ? "Bottom" : "Side")
+                            .font(.system(size: 9.5, weight: .bold))
+                    }
+                    .foregroundColor(terminalService.dockPosition == .right ? Color.flashbrowseAccent : .secondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.white.opacity(0.08))
+                    .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+                .help(terminalService.dockPosition == .right ? "Dock terminal at bottom" : "Dock terminal as vertical side column (Ultrawide Mode)")
+                
                 // Clear Button
                 Button(action: {
                     terminalService.clear()
@@ -169,7 +190,7 @@ public struct TerminalPanelView: View {
                 leftTerminalView
             }
         }
-        .frame(minHeight: 140, idealHeight: 200, maxHeight: 400)
+        .modifier(TerminalFrameModifier(position: terminalService.dockPosition))
         .onAppear {
             isLeftInputFocused = true
         }
@@ -351,6 +372,19 @@ public struct TerminalPanelView: View {
                 terminalService.historyIndex = history.count
                 inputCommand = ""
             }
+        }
+    }
+}
+
+// MARK: - Dynamic Frame Modifier (Bottom vs Right Side)
+public struct TerminalFrameModifier: ViewModifier {
+    public let position: TerminalDockPosition
+    
+    public func body(content: Content) -> some View {
+        if position == .bottom {
+            content.frame(minHeight: 140, idealHeight: 200, maxHeight: 450)
+        } else {
+            content.frame(minWidth: 320, idealWidth: 440, maxWidth: 850)
         }
     }
 }

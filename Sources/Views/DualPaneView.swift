@@ -8,9 +8,12 @@ public enum ActivePane {
 public struct DualPaneContainerView: View {
     @ObservedObject var leftState: NavigationState
     @ObservedObject var rightState: NavigationState
+    @ObservedObject var inspectorState = SharedInspectorState.shared
     @Binding var activePane: ActivePane
     @Binding var isDualPane: Bool
     @Binding var isCommanderMode: Bool
+    public var isDualInspectorEnabled: Bool = true
+    
     @State private var showingNewFolderAlert: Bool = false
     @State private var newFolderName: String = ""
     @State private var showingBatchRename: Bool = false
@@ -20,13 +23,15 @@ public struct DualPaneContainerView: View {
         rightState: NavigationState,
         activePane: Binding<ActivePane>,
         isDualPane: Binding<Bool>,
-        isCommanderMode: Binding<Bool>
+        isCommanderMode: Binding<Bool>,
+        isDualInspectorEnabled: Bool = true
     ) {
         self.leftState = leftState
         self.rightState = rightState
         self._activePane = activePane
         self._isDualPane = isDualPane
         self._isCommanderMode = isCommanderMode
+        self.isDualInspectorEnabled = isDualInspectorEnabled
     }
     
     private var activeState: NavigationState {
@@ -44,8 +49,21 @@ public struct DualPaneContainerView: View {
                     paneWrapper(state: leftState, isFocused: activePane == .left) {
                         activePane = .left
                     }
+                    .frame(minWidth: 260)
+                    
+                    if isDualInspectorEnabled && inspectorState.isInspectorVisible && !inspectorState.isInspectorDetached {
+                        InspectorView(state: SharedInspectorState.left, titlePrefix: "Left: ")
+                            .frame(minWidth: 240, idealWidth: 360, maxWidth: 800)
+                    }
+                    
                     paneWrapper(state: rightState, isFocused: activePane == .right) {
                         activePane = .right
+                    }
+                    .frame(minWidth: 260)
+                    
+                    if isDualInspectorEnabled && inspectorState.isInspectorVisible && !inspectorState.isInspectorDetached {
+                        InspectorView(state: SharedInspectorState.right, titlePrefix: "Right: ")
+                            .frame(minWidth: 240, idealWidth: 360, maxWidth: 800)
                     }
                 }
             } else {

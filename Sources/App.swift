@@ -66,10 +66,21 @@ struct FlashbrowseApp: App {
                 }
                 .keyboardShortcut("j", modifiers: .command)
                 
+                Button("Dock Terminal to Bottom / Side") {
+                    TerminalService.shared.toggleDockPosition()
+                }
+                .keyboardShortcut("j", modifiers: [.command, .option])
+                
                 Button("Toggle Inspector") {
                     SharedInspectorState.shared.toggleInspector()
                 }
                 .keyboardShortcut("i", modifiers: .command)
+                
+                Button("Toggle Dual Inspector (Per Pane)") {
+                    let current = UserDefaults.standard.bool(forKey: "flashbrowse_dual_inspector_enabled")
+                    UserDefaults.standard.set(!current, forKey: "flashbrowse_dual_inspector_enabled")
+                }
+                .keyboardShortcut("d", modifiers: [.command, .option])
                 
                 Button("Detach / Dock Inspector") {
                     if SharedInspectorState.shared.isInspectorDetached {

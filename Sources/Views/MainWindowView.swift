@@ -1,8 +1,8 @@
 import SwiftUI
 
 public struct MainWindowView: View {
-    @StateObject private var leftState = NavigationState()
-    @StateObject private var rightState = NavigationState()
+    @StateObject private var leftState = NavigationState(inspectorState: SharedInspectorState.left)
+    @StateObject private var rightState = NavigationState(inspectorState: SharedInspectorState.right)
     @ObservedObject private var indexService = IndexService.shared
     @ObservedObject private var sshService = SSHService.shared
     @ObservedObject private var terminalService = TerminalService.shared
@@ -12,7 +12,7 @@ public struct MainWindowView: View {
     @State private var isCommanderMode: Bool = false
     @State private var showingBatchRename: Bool = false
     @State private var isCommandPaletteOpen: Bool = false
-    @AppStorage("flashbrowse_side_inspector_open") private var isSideInspectorOpen: Bool = true
+    @AppStorage("flashbrowse_dual_inspector_enabled") private var isDualInspectorEnabled: Bool = true
     
     public init() {}
     
@@ -28,7 +28,7 @@ public struct MainWindowView: View {
                 HSplitView {
                     VStack(spacing: 0) {
                         if sshService.isRemoteBrowserOpen {
-                            RemoteBrowserView(localState: leftState)
+                            RemoteBrowserView(localState: leftState, isDualInspectorEnabled: isDualInspectorEnabled)
                         } else if indexService.activeIndex != nil {
                             IndexBrowserView(navState: currentActiveState)
                         } else {
@@ -37,23 +37,31 @@ public struct MainWindowView: View {
                                 rightState: rightState,
                                 activePane: $activePane,
                                 isDualPane: $isDualPane,
-                                isCommanderMode: $isCommanderMode
+                                isCommanderMode: $isCommanderMode,
+                                isDualInspectorEnabled: isDualInspectorEnabled
                             )
                         }
                         
-                        // Embedded Terminal Drawer (VS Code style)
-                        if terminalService.isOpen {
+                        // Embedded Terminal Drawer (Bottom Position)
+                        if terminalService.isOpen && terminalService.dockPosition == .bottom {
                             Divider()
                             TerminalPanelView()
                                 .transition(.move(edge: .bottom))
                         }
                     }
-                    .frame(minWidth: 460, maxWidth: .infinity)
+                    .frame(minWidth: 400, maxWidth: .infinity)
                     
-                    // Attached Inspector Pane (1/3 of browser, resizable)
-                    if inspectorState.isInspectorVisible && !inspectorState.isInspectorDetached {
-                        InspectorView()
-                            .frame(minWidth: 280, idealWidth: 380, maxWidth: 650)
+                    // Attached Single Inspector (when Dual Inspector is OFF or in single-pane)
+                    if inspectorState.isInspectorVisible && !inspectorState.isInspectorDetached && (!isDualInspectorEnabled || (!isDualPane && !sshService.isRemoteBrowserOpen)) {
+                        InspectorView(state: SharedInspectorState.shared)
+                            .frame(minWidth: 260, idealWidth: 380, maxWidth: 750)
+                    }
+                    
+                    // Vertical Full-Height Terminal (Right Side Position for Ultrawide)
+                    if terminalService.isOpen && terminalService.dockPosition == .right {
+                        TerminalPanelView()
+                            .frame(minWidth: 320, idealWidth: 440, maxWidth: 850)
+                            .transition(.move(edge: .trailing))
                     }
                 }
             }
@@ -184,6 +192,19 @@ public struct MainWindowView: View {
                 }
                 .help("Directory Disk Usage & Subfolder Sizes (du -h) — Option+S")
                 
+                // Dual Inspector Toggle (Cmd+Option+D)
+                if isDualPane || sshService.isRemoteBrowserOpen {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isDualInspectorEnabled.toggle()
+                        }
+                    }) {
+                        Image(systemName: isDualInspectorEnabled ? "rectangle.split.2x2.fill" : "rectangle.split.2x2")
+                            .foregroundColor(isDualInspectorEnabled ? Color.cyan : .secondary)
+                    }
+                    .help("Toggle Dual Inspector (One independent inspector per browser pane) — Cmd+Option+D")
+                }
+                
                 // Inspector Toggle (Cmd+I)
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -217,6 +238,12 @@ public struct MainWindowView: View {
         .onKeyPress { press in
             if press.modifiers.contains(.option) && (press.characters == "s" || press.characters == "S" || press.characters == "ß") {
                 currentActiveState.showingDiskUsageSheet.toggle()
+                return .handled
+            }
+            if press.modifiers.contains([.command, .option]) && (press.characters == "d" || press.characters == "D" || press.characters == "∂") {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isDualInspectorEnabled.toggle()
+                }
                 return .handled
             }
             return .ignored

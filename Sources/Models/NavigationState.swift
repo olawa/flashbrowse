@@ -290,8 +290,11 @@ public class NavigationState: ObservableObject {
         return crumbs
     }
     
-    public init(initialDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
+    public var inspectorState: SharedInspectorState
+    
+    public init(initialDirectory: URL = FileManager.default.homeDirectoryForCurrentUser, inspectorState: SharedInspectorState? = nil) {
         self.currentDirectory = initialDirectory.standardized
+        self.inspectorState = inspectorState ?? SharedInspectorState.shared
         self.pathInputText = self.currentDirectory.path
         loadBookmarks()
         loadPresets()
@@ -339,7 +342,10 @@ public class NavigationState: ObservableObject {
         inspectorDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 35_000_000) // 35ms fast & smooth debounce
             if !Task.isCancelled {
-                SharedInspectorState.shared.updateTarget(url: url)
+                self.inspectorState.updateTarget(url: url)
+                if self.inspectorState !== SharedInspectorState.shared {
+                    SharedInspectorState.shared.updateTarget(url: url)
+                }
             }
         }
     }

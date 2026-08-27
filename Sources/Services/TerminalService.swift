@@ -21,11 +21,19 @@ public struct TerminalOutputLine: Identifiable, Hashable {
     }
 }
 
+public enum TerminalDockPosition: String, CaseIterable, Identifiable {
+    case bottom = "Bottom Drawer"
+    case right = "Vertical Column"
+    
+    public var id: String { rawValue }
+}
+
 @MainActor
 public class TerminalService: ObservableObject {
     public static let shared = TerminalService()
     
     @Published public var isOpen: Bool = false
+    @Published public var dockPosition: TerminalDockPosition = .bottom
     @Published public var workingDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     @Published public var outputLines: [TerminalOutputLine] = []
     @Published public var isRunningCommand: Bool = false
@@ -99,6 +107,10 @@ public class TerminalService: ObservableObject {
         } else {
             isOpen = false
         }
+    }
+    
+    public func toggleDockPosition() {
+        dockPosition = (dockPosition == .bottom) ? .right : .bottom
     }
     
     // MARK: - Browser -> Terminal Sync

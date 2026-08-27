@@ -4,6 +4,9 @@ import UniformTypeIdentifiers
 public struct RemoteBrowserView: View {
     @ObservedObject var sshService = SSHService.shared
     @ObservedObject var localState: NavigationState
+    @ObservedObject var inspectorState = SharedInspectorState.shared
+    public var isDualInspectorEnabled: Bool = true
+    
     @State private var hoveredRemotePath: String?
     @State private var selectedRemoteItems: Set<String> = []
     @State private var isDownloading: Bool = false
@@ -17,8 +20,9 @@ public struct RemoteBrowserView: View {
     @FocusState private var isRemotePathFocused: Bool
     @State private var lastRemoteNavTime: Date = Date.distantPast
     
-    public init(localState: NavigationState) {
+    public init(localState: NavigationState, isDualInspectorEnabled: Bool = true) {
         self.localState = localState
+        self.isDualInspectorEnabled = isDualInspectorEnabled
     }
     
     private func handleRemoteTap(item: RemoteFileItem) {
@@ -171,7 +175,7 @@ public struct RemoteBrowserView: View {
                     
                     StatusBarView(state: localState)
                 }
-                .frame(minWidth: 320)
+                .frame(minWidth: 260)
                 .background(
                     RoundedRectangle(cornerRadius: 0)
                         .fill(isLocalDropTargeted ? Color.green.opacity(0.12) : Color.clear)
@@ -182,6 +186,12 @@ public struct RemoteBrowserView: View {
                 )
                 .onDrop(of: [UTType.utf8PlainText.identifier, UTType.plainText.identifier, UTType.fileURL.identifier], isTargeted: $isLocalDropTargeted) { providers in
                     handleLocalDrop(providers: providers)
+                }
+                
+                // LEFT INSPECTOR (Local System Preview)
+                if isDualInspectorEnabled && inspectorState.isInspectorVisible && !inspectorState.isInspectorDetached {
+                    InspectorView(state: SharedInspectorState.left, titlePrefix: "Local: ")
+                        .frame(minWidth: 240, idealWidth: 380, maxWidth: 850)
                 }
                 
                 // RIGHT PANE: REMOTE SSH SERVER
@@ -325,7 +335,7 @@ public struct RemoteBrowserView: View {
                     
                     remoteStatusBar
                 }
-                .frame(minWidth: 350)
+                .frame(minWidth: 260)
                 .background(
                     RoundedRectangle(cornerRadius: 0)
                         .fill(isRemoteDropTargeted ? Color.flashbrowseAccent.opacity(0.12) : Color.clear)
@@ -336,6 +346,12 @@ public struct RemoteBrowserView: View {
                 )
                 .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isRemoteDropTargeted) { providers in
                     handleRemoteDrop(providers: providers)
+                }
+                
+                // RIGHT INSPECTOR (Remote SSH Server Preview)
+                if isDualInspectorEnabled && inspectorState.isInspectorVisible && !inspectorState.isInspectorDetached {
+                    InspectorView(state: SharedInspectorState.right, titlePrefix: "Remote (\(sshService.activeHost?.alias ?? "SSH")): ")
+                        .frame(minWidth: 240, idealWidth: 380, maxWidth: 850)
                 }
             }
         }
@@ -484,7 +500,8 @@ public struct RemoteBrowserView: View {
         guard !item.isDirectory else { return }
         Task {
             if let cachedURL = try? await sshService.downloadToCache(item: item) {
-                localState.scheduleInspectorUpdate(url: cachedURL)
+                SharedInspectorState.right.updateTarget(url: cachedURL)
+                SharedInspectorState.shared.updateTarget(url: cachedURL)
             }
         }
     }

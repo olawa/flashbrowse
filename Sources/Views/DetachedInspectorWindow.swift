@@ -227,12 +227,16 @@ public struct MarkdownRenderer {
 
 // MARK: - Main Inspector View
 public struct InspectorView: View {
-    @ObservedObject var state = SharedInspectorState.shared
+    @ObservedObject var state: SharedInspectorState
     @State private var renderMode: Int = 0 // 0 = Rendered / Visual, 1 = Source / Grid
     @AppStorage("flashbrowse_inspector_dark_theme") private var isDarkTheme: Bool = true
     @State private var tableFilter: String = ""
+    public var titlePrefix: String?
     
-    public init() {}
+    public init(state: SharedInspectorState? = nil, titlePrefix: String? = nil) {
+        self.state = state ?? SharedInspectorState.shared
+        self.titlePrefix = titlePrefix
+    }
     
     // Theme Palette Colors
     private var bgColor: Color {
@@ -259,7 +263,7 @@ public struct InspectorView: View {
                     .foregroundColor(Color.flashbrowseAccent)
                     .font(.system(size: 13))
                 
-                Text(state.metadata?.name ?? "Inspector")
+                Text("\(titlePrefix ?? "")\(state.metadata?.name ?? "Inspector")")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(isDarkTheme ? .white : .primary)
                     .lineLimit(1)
@@ -504,7 +508,7 @@ public struct InspectorView: View {
             
         case .image:
             if let img = state.previewImage {
-                InteractivePhotoView(img: img, meta: meta, isDarkTheme: isDarkTheme)
+                InteractivePhotoView(img: img, meta: meta, isDarkTheme: isDarkTheme, state: state)
             }
             
         case .html:
@@ -744,7 +748,14 @@ public struct InteractivePhotoView: View {
     let img: NSImage
     let meta: ExtendedFileMetadata
     let isDarkTheme: Bool
-    @ObservedObject var state = SharedInspectorState.shared
+    @ObservedObject var state: SharedInspectorState
+    
+    public init(img: NSImage, meta: ExtendedFileMetadata, isDarkTheme: Bool, state: SharedInspectorState? = nil) {
+        self.img = img
+        self.meta = meta
+        self.isDarkTheme = isDarkTheme
+        self.state = state ?? SharedInspectorState.shared
+    }
     
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
@@ -763,12 +774,6 @@ public struct InteractivePhotoView: View {
             return swipeTranslation
         }
         return state.cumulativeSwipeOffset
-    }
-    
-    public init(img: NSImage, meta: ExtendedFileMetadata, isDarkTheme: Bool) {
-        self.img = img
-        self.meta = meta
-        self.isDarkTheme = isDarkTheme
     }
     
     public var body: some View {
