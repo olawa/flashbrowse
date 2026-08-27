@@ -173,12 +173,21 @@ public class NavigationState: ObservableObject {
         
         // 2. Text files, logs, scripts, markdown, code, config (< 5 MB)
         let textExtensions: Set<String> = [
-            "log", "txt", "text", "md", "markdown", "py", "sh", "bash", "zsh",
-            "json", "csv", "tsv", "tab", "yaml", "yml", "xml", "html", "htm",
-            "css", "js", "ts", "swift", "c", "cpp", "h", "hpp", "r", "rs",
-            "go", "java", "kt", "sql", "fasta", "fa", "bed", "gtf", "gff"
+            "log", "txt", "text", "md", "markdown", "py", "pyw", "ipynb", "smk", "sh", "bash", "zsh", "fish", "command",
+            "json", "jsonl", "geojson", "csv", "tsv", "tab", "yaml", "yml", "toml", "ini", "conf", "cfg", "env",
+            "xml", "html", "htm", "css", "scss", "sass", "less", "js", "ts", "jsx", "tsx", "mjs", "cjs", "swift",
+            "c", "cpp", "cc", "cxx", "h", "hpp", "r", "rmd", "rs", "go", "java", "kt", "kts", "scala", "lua", "perl", "pl", "pm", "rb", "php",
+            "sql", "fasta", "fa", "fna", "faa", "bed", "gtf", "gff", "gff3", "vcf", "dockerfile", "makefile", "diff", "patch"
         ]
-        if textExtensions.contains(ext) {
+        
+        let filenameLower = item.url.lastPathComponent.lowercased()
+        let isCommonCodeFile = filenameLower == "makefile" || filenameLower.hasPrefix("makefile.") ||
+                               filenameLower == "dockerfile" || filenameLower.hasPrefix("dockerfile.") ||
+                               filenameLower == "snakefile" || filenameLower.hasPrefix(".bash") ||
+                               filenameLower.hasPrefix(".zsh") || filenameLower.hasPrefix(".env") ||
+                               filenameLower == ".gitignore" || filenameLower == ".dockerignore"
+        
+        if textExtensions.contains(ext) || isCommonCodeFile {
             return (item.size ?? 0) < 5 * 1024 * 1024 // < 5MB
         }
         

@@ -428,21 +428,39 @@ public class SharedInspectorState: ObservableObject {
             }
         }
         
-        // 8. Code / Text Preview
-        let codeExtensions = [
-            "swift", "rs", "py", "c", "cpp", "h", "hpp", "js", "ts", "jsx", "tsx",
-            "json", "toml", "yaml", "yml", "sh", "zsh", "bash", "go", "java", "kt",
-            "css", "scss", "sass", "less", "sql", "xml", "plist", "log", "txt", "vcf", "bed", "gtf"
+        // 8. Code / Script / Text Preview (VS Code Highlighting)
+        let codeExtensions: Set<String> = [
+            "swift", "rs", "py", "pyw", "ipynb", "r", "rmd", "smk", "c", "cpp", "cc", "cxx", "c++", "h", "hpp", "h++",
+            "js", "ts", "jsx", "tsx", "mjs", "cjs", "json", "jsonl", "geojson", "toml", "yaml", "yml",
+            "sh", "zsh", "bash", "fish", "command", "go", "java", "kt", "kts", "scala", "lua", "perl", "pl", "pm", "rb", "php",
+            "css", "scss", "sass", "less", "sql", "xml", "plist", "log", "txt", "text", "vcf", "bed", "gtf", "gff", "gff3",
+            "fasta", "fa", "fna", "faa", "dockerfile", "makefile", "env", "ini", "conf", "cfg", "diff", "patch"
         ]
         
-        if codeExtensions.contains(ext) {
+        let filenameLower = url.lastPathComponent.lowercased()
+        let isCommonCodeFile = filenameLower == "makefile" || filenameLower.hasPrefix("makefile.") ||
+                               filenameLower == "dockerfile" || filenameLower.hasPrefix("dockerfile.") ||
+                               filenameLower == "snakefile" || filenameLower.hasPrefix(".bash") ||
+                               filenameLower.hasPrefix(".zsh") || filenameLower.hasPrefix(".env") ||
+                               filenameLower == ".gitignore" || filenameLower == ".dockerignore"
+        
+        if codeExtensions.contains(ext) || isCommonCodeFile {
             if let data = try? Data(contentsOf: url, options: .mappedIfSafe),
-               let str = String(data: data.prefix(100000), encoding: .utf8) {
+               let str = String(data: data.prefix(2_000_000), encoding: .utf8) {
                 self.contentType = .code
                 self.textContent = str
                 self.previewImage = nil
                 return
             }
+        }
+        
+        // Fallback: Check if smaller unknown file (< 500KB) is plain UTF-8 text / script
+        if let data = try? Data(contentsOf: url, options: .mappedIfSafe), data.count < 500_000,
+           let str = String(data: data, encoding: .utf8), !str.contains("\0") {
+            self.contentType = .code
+            self.textContent = str
+            self.previewImage = nil
+            return
         }
         
         self.contentType = .generic

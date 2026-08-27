@@ -127,6 +127,8 @@ public struct MarkdownRenderer {
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/\(isDark ? "vs2015" : "vs").min.css">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
         <style>
             :root {
@@ -162,21 +164,22 @@ public struct MarkdownRenderer {
             a:hover { text-decoration: underline; }
             pre {
                 background-color: var(--code-bg);
-                padding: 16px;
+                padding: 14px;
                 border-radius: 6px;
                 overflow: auto;
-                font-size: 12px;
+                font-size: 12.5px;
                 font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
                 border: 1px solid var(--border);
+                line-height: 1.5;
             }
             code {
                 font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-                font-size: 85%;
+                font-size: 88%;
                 background-color: var(--code-bg);
                 padding: .2em .4em;
                 border-radius: 4px;
             }
-            pre code { background-color: transparent; padding: 0; border: 0; }
+            pre code { background-color: transparent !important; padding: 0 !important; border: 0 !important; }
             blockquote {
                 padding: 0 1em;
                 color: var(--quote);
@@ -203,6 +206,14 @@ public struct MarkdownRenderer {
         <script>
             const rawMarkdown = `\(escaped)`;
             if (typeof marked !== 'undefined') {
+                if (typeof hljs !== 'undefined') {
+                    marked.setOptions({
+                        highlight: function(code, lang) {
+                            const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                            return hljs.highlight(code, { language }).value;
+                        }
+                    });
+                }
                 document.getElementById('content').innerHTML = marked.parse(rawMarkdown);
             } else {
                 document.getElementById('content').innerText = rawMarkdown;
@@ -445,7 +456,7 @@ public struct InspectorView: View {
                 WebViewRenderer(url: url)
                     .background(contentBgColor)
             } else if let text = state.textContent {
-                codeViewer(text: text)
+                codeViewer(text: text, filename: meta.name)
             }
             
         case .markdown:
@@ -454,12 +465,12 @@ public struct InspectorView: View {
                 WebViewRenderer(htmlContent: html, baseURL: state.currentURL?.deletingLastPathComponent())
                     .background(contentBgColor)
             } else if let text = state.textContent {
-                codeViewer(text: text)
+                codeViewer(text: text, filename: meta.name)
             }
             
         case .code, .text:
             if let text = state.textContent {
-                codeViewer(text: text)
+                codeViewer(text: text, filename: meta.name)
             }
             
         case .folder:
@@ -571,16 +582,11 @@ public struct InspectorView: View {
     }
     
     @ViewBuilder
-    private func codeViewer(text: String) -> some View {
-        ScrollView {
-            Text(text)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(isDarkTheme ? Color(red: 0.9, green: 0.9, blue: 0.9) : .primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .textSelection(.enabled)
-        }
-        .background(contentBgColor)
+    private func codeViewer(text: String, filename: String? = nil) -> some View {
+        let name = filename ?? state.metadata?.name ?? "source.txt"
+        let html = CodeSyntaxRenderer.renderHTML(code: text, filename: name, isDark: isDarkTheme)
+        WebViewRenderer(htmlContent: html, baseURL: state.currentURL?.deletingLastPathComponent())
+            .background(contentBgColor)
     }
     
     @ViewBuilder
