@@ -31,8 +31,7 @@ public struct ExtendedFileMetadata {
         self.sizeFormatted = byteFormatter.string(fromByteCount: exact)
         
         let dateFormatter = DateFormatter()
-        dateFormatter.dateStyle = .medium
-        dateFormatter.timeStyle = .medium
+        dateFormatter.dateFormat = "d MMM yyyy, HH:mm"
         
         let created = attrs[.creationDate] as? Date ?? Date()
         let modified = attrs[.modificationDate] as? Date ?? Date()

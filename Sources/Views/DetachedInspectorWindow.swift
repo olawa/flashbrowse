@@ -410,7 +410,7 @@ public struct InspectorView: View {
                         
                         // Metadata Panel (Right)
                         metadataSidebar(meta: meta)
-                            .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+                            .frame(minWidth: 120, idealWidth: 160, maxWidth: 220)
                     }
                 }
             } else {
@@ -592,57 +592,56 @@ public struct InspectorView: View {
     @ViewBuilder
     private func metadataSidebar(meta: ExtendedFileMetadata) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text("INFORMATION")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9.5, weight: .bold))
                     .foregroundColor(.secondary)
                 
-                VStack(spacing: 8) {
-                    metaRow(label: "Kind", value: meta.kindDescription)
-                    metaRow(label: "Size", value: "\(meta.sizeFormatted) (\(meta.exactBytes) bytes)")
+                VStack(alignment: .leading, spacing: 7) {
+                    metaItem(label: "KIND", value: meta.kindDescription)
+                    metaItem(label: "SIZE", value: meta.sizeFormatted)
                     if let dim = meta.dimensions {
-                        metaRow(label: "Dimensions", value: dim)
+                        metaItem(label: "DIMENSIONS", value: dim)
                     }
-                    metaRow(label: "Modified", value: meta.dateModified)
-                    metaRow(label: "Created", value: meta.dateCreated)
-                    metaRow(label: "Permissions", value: meta.permissions)
+                    metaItem(label: "MODIFIED", value: meta.dateModified)
+                    metaItem(label: "PERMISSIONS", value: meta.permissions)
                 }
-                .padding(10)
+                .padding(8)
                 .background(cardBgColor)
-                .cornerRadius(8)
+                .cornerRadius(6)
                 
                 Text("LOCATION")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9.5, weight: .bold))
                     .foregroundColor(.secondary)
                 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(meta.path)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(isDarkTheme ? Color.white.opacity(0.8) : .secondary)
                         .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
                     
-                    HStack {
-                        Button("Copy Path") {
-                            let pasteboard = NSPasteboard.general
-                            pasteboard.clearContents()
-                            pasteboard.setString(meta.path, forType: .string)
+                    Button(action: {
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(meta.path, forType: .string)
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.on.doc")
+                                .font(.system(size: 9))
+                            Text("Copy Path")
+                                .font(.system(size: 10.5))
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        
-                        Button("Reveal in Finder") {
-                            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: meta.path)])
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .frame(maxWidth: .infinity)
                     }
-                    .padding(.top, 4)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                .padding(10)
+                .padding(8)
                 .background(cardBgColor)
-                .cornerRadius(8)
+                .cornerRadius(6)
             }
-            .padding(14)
+            .padding(10)
         }
         .background(bgColor)
     }
@@ -664,16 +663,15 @@ public struct InspectorView: View {
     }
     
     @ViewBuilder
-    private func metaRow(label: String, value: String) -> some View {
-        HStack(alignment: .top) {
+    private func metaItem(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.secondary)
-                .frame(width: 80, alignment: .leading)
+                .font(.system(size: 8.5, weight: .bold))
+                .foregroundColor(.secondary.opacity(0.8))
             Text(value)
                 .font(.system(size: 11))
                 .foregroundColor(isDarkTheme ? .white : .primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
         }
     }
