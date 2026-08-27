@@ -32,7 +32,7 @@ public struct FileItem: Identifiable, Hashable {
     public let categoryColor: Color
     public var itemCount: Int?
     
-    private static let byteFormatter: ByteCountFormatter = {
+    public static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useAll]
         formatter.countStyle = .file

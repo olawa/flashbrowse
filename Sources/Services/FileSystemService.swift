@@ -71,7 +71,8 @@ public class FileSystemService {
         items: [FileItem],
         by field: SortField,
         ascending: Bool,
-        foldersFirst: Bool
+        foldersFirst: Bool,
+        folderSizes: [URL: Int64]? = nil
     ) -> [FileItem] {
         return items.sorted { a, b in
             if foldersFirst && a.isDirectory != b.isDirectory {
@@ -91,8 +92,8 @@ public class FileSystemService {
                     comparison = d1 < d2 ? .orderedAscending : .orderedDescending
                 }
             case .size:
-                let s1 = a.size ?? (a.isDirectory ? -1 : 0)
-                let s2 = b.size ?? (b.isDirectory ? -1 : 0)
+                let s1 = (a.isDirectory ? folderSizes?[a.url] : a.size) ?? (a.isDirectory ? -1 : 0)
+                let s2 = (b.isDirectory ? folderSizes?[b.url] : b.size) ?? (b.isDirectory ? -1 : 0)
                 if s1 == s2 {
                     comparison = a.name.localizedStandardCompare(b.name)
                 } else {

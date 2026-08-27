@@ -264,6 +264,9 @@ public class NavigationState: ObservableObject {
     @Published public var pathInputText: String = ""
     @Published public var volumeInfo: String = ""
     @Published public var volumeStorage: VolumeStorageInfo? = nil
+    @Published public var showingDiskUsageSheet: Bool = false
+    @Published public var folderSizesCache: [URL: Int64] = [:]
+    @Published public var isCalculatingFolderSizes: Bool = false
     
     private var backStack: [URL] = []
     private var forwardStack: [URL] = []
@@ -665,7 +668,8 @@ public class NavigationState: ObservableObject {
                 items: items,
                 by: sortField,
                 ascending: sortAscending,
-                foldersFirst: foldersFirst
+                foldersFirst: foldersFirst,
+                folderSizes: folderSizesCache
             )
             return
         }
@@ -680,7 +684,8 @@ public class NavigationState: ObservableObject {
                 items: deepResults,
                 by: sortField,
                 ascending: sortAscending,
-                foldersFirst: foldersFirst
+                foldersFirst: foldersFirst,
+                folderSizes: folderSizesCache
             )
         } else {
             let matches = items.filter { $0.lowercaseName.contains(query) }
@@ -688,7 +693,8 @@ public class NavigationState: ObservableObject {
                 items: matches,
                 by: sortField,
                 ascending: sortAscending,
-                foldersFirst: foldersFirst
+                foldersFirst: foldersFirst,
+                folderSizes: folderSizesCache
             )
         }
     }
@@ -720,6 +726,41 @@ public class NavigationState: ObservableObject {
         FileSystemService.shared.startMonitoring(url: currentDirectory) { [weak self] in
             Task { @MainActor in
                 self?.reload()
+            }
+        }
+    }
+    
+    // MARK: - Disk Usage & Folder Size Calculations (du -h)
+    public func setFolderSizeCache(url: URL, size: Int64) {
+        folderSizesCache[url] = size
+    }
+    
+    public func calculateSize(for item: FileItem) {
+        guard item.isDirectory else { return }
+        Task {
+            let size = await DiskUsageService.shared.calculateSingleItemSize(url: item.url)
+            await MainActor.run {
+                self.folderSizesCache[item.url] = size
+                let formatter = ByteCountFormatter()
+                formatter.countStyle = .file
+                let formatted = formatter.string(fromByteCount: size)
+                self.showToast("📊 \(item.name): \(formatted)")
+            }
+        }
+    }
+    
+    public func calculateAllFolderSizes() {
+        let dirURL = currentDirectory
+        self.isCalculatingFolderSizes = true
+        self.showToast("⏳ Calculating folder sizes (du -h)...")
+        Task {
+            let report = await DiskUsageService.shared.analyzeDirectory(url: dirURL)
+            await MainActor.run {
+                for entry in report.entries where entry.isDirectory {
+                    self.folderSizesCache[entry.url] = entry.sizeBytes
+                }
+                self.isCalculatingFolderSizes = false
+                self.showToast("✅ Calculated sizes for \(report.folderCount) folder(s)")
             }
         }
     }

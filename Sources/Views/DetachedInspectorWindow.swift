@@ -474,18 +474,22 @@ public struct InspectorView: View {
             }
             
         case .folder:
-            VStack(spacing: 12) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 64))
-                    .foregroundColor(Color.flashbrowseAccent)
-                Text(meta.name)
-                    .font(.system(size: 16, weight: .bold))
-                Text("Folder")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+            if let url = state.currentURL {
+                FolderDiskUsagePreviewView(folderURL: url, isDarkTheme: isDarkTheme)
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 64))
+                        .foregroundColor(Color.flashbrowseAccent)
+                    Text(meta.name)
+                        .font(.system(size: 16, weight: .bold))
+                    Text("Folder")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(contentBgColor)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(contentBgColor)
             
         case .generic:
             if let url = state.currentURL {
@@ -1319,3 +1323,109 @@ public class InspectorWindowController: NSObject, NSWindowDelegate {
         }
     }
 }
+
+// MARK: - Folder Disk Usage Live Preview
+public struct FolderDiskUsagePreviewView: View {
+    public let folderURL: URL
+    public let isDarkTheme: Bool
+    
+    @State private var report: DirectoryUsageReport?
+    @State private var isLoading: Bool = true
+    
+    public var body: some View {
+        VStack(spacing: 0) {
+            if isLoading {
+                VStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Scanning folder disk usage (du -h)...")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let rep = report {
+                VStack(spacing: 0) {
+                    // Header summary banner
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(folderURL.lastPathComponent)
+                                .font(.system(size: 13, weight: .bold))
+                                .lineLimit(1)
+                            Text(rep.summaryText)
+                                .font(.system(size: 10.5))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Text(rep.formattedTotalSize)
+                            .font(.system(size: 15, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.flashbrowseAccent)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                    
+                    Divider()
+                    
+                    // List of sub-items
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(rep.entries.prefix(30)) { entry in
+                                HStack(spacing: 6) {
+                                    Image(systemName: entry.iconName)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(entry.isDirectory ? Color.flashbrowseAccent : .secondary)
+                                        .frame(width: 14)
+                                    
+                                    Text(entry.name)
+                                        .font(.system(size: 11, weight: entry.isDirectory ? .medium : .regular))
+                                        .lineLimit(1)
+                                    
+                                    Spacer()
+                                    
+                                    // Proportion bar
+                                    GeometryReader { geo in
+                                        ZStack(alignment: .leading) {
+                                            Capsule()
+                                                .fill(Color.secondary.opacity(0.15))
+                                                .frame(height: 5)
+                                            Capsule()
+                                                .fill(entry.sizeBytes >= 100_000_000 ? Color.orange : Color.flashbrowseAccent)
+                                                .frame(width: max(2, geo.size.width * CGFloat(entry.proportion)), height: 5)
+                                        }
+                                    }
+                                    .frame(width: 60, height: 5)
+                                    
+                                    Text(entry.formattedSize)
+                                        .font(.system(size: 10.5, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                        .frame(width: 55, alignment: .trailing)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 3)
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                }
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(Color.flashbrowseAccent)
+                    Text(folderURL.lastPathComponent)
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: folderURL) {
+            isLoading = true
+            let res = await DiskUsageService.shared.analyzeDirectory(url: folderURL)
+            await MainActor.run {
+                self.report = res
+                self.isLoading = false
+            }
+        }
+    }
+}
+

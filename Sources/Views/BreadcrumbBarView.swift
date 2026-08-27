@@ -234,6 +234,20 @@ public struct BreadcrumbBarView: View {
                     .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
             )
             
+            // 📊 Disk Usage (du -h) Toolbar Button
+            Button(action: {
+                state.showingDiskUsageSheet = true
+            }) {
+                Image(systemName: "chart.bar.xaxis")
+                    .font(.system(size: 12))
+                    .foregroundColor(state.showingDiskUsageSheet ? Color.white : Color.primary)
+                    .frame(width: 26, height: 26)
+                    .background(state.showingDiskUsageSheet ? Color.flashbrowseAccent : Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(6)
+            }
+            .buttonStyle(.plain)
+            .help("Directory Disk Usage & Subfolder Sizes (du -h) — Option+S")
+            
             // 📌 Pin Window (Always on Top) Toolbar Button
             Button(action: {
                 state.togglePinWindow()
@@ -250,6 +264,17 @@ public struct BreadcrumbBarView: View {
             
             // View Options Menu
             Menu {
+                Section("Disk Usage (du -h)") {
+                    Button("Analyze Directory Disk Usage (du -h)...") {
+                        state.showingDiskUsageSheet = true
+                    }
+                    Button("Calculate All Folder Sizes") {
+                        state.calculateAllFolderSizes()
+                    }
+                }
+                
+                Divider()
+                
                 Section("Window & View") {
                     Toggle("Always on Top (Pin Window)", isOn: $state.isPinnedAlwaysOnTop)
                 }

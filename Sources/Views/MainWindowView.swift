@@ -167,6 +167,14 @@ public struct MainWindowView: View {
                 }
                 .help("Batch Rename Tool (Cmd+Shift+R)")
                 
+                // Disk Usage Analyzer (Option+S)
+                Button(action: {
+                    currentActiveState.showingDiskUsageSheet = true
+                }) {
+                    Image(systemName: "chart.bar.xaxis")
+                }
+                .help("Directory Disk Usage & Subfolder Sizes (du -h) — Option+S")
+                
                 // Inspector Companion & iPad Window Toggle (Cmd+I / Cmd+Option+I)
                 Button(action: {
                     InspectorWindowController.shared.toggleWindow()
@@ -186,9 +194,22 @@ public struct MainWindowView: View {
                 currentActiveState.reload()
             }
         }
+        .sheet(isPresented: Binding(
+            get: { currentActiveState.showingDiskUsageSheet },
+            set: { currentActiveState.showingDiskUsageSheet = $0 }
+        )) {
+            DiskUsageSheetView(state: currentActiveState)
+        }
         // Keyboard Shortcuts
         .keyboardShortcut("d", modifiers: .command)
         .keyboardShortcut("i", modifiers: .command)
+        .onKeyPress { press in
+            if press.modifiers.contains(.option) && (press.characters == "s" || press.characters == "S" || press.characters == "ß") {
+                currentActiveState.showingDiskUsageSheet.toggle()
+                return .handled
+            }
+            return .ignored
+        }
         .onCommand(#selector(NSResponder.selectAll(_:))) {
             currentActiveState.selectedURLs = Set(currentActiveState.filteredItems.map { $0.url })
         }

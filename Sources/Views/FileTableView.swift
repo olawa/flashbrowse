@@ -245,9 +245,18 @@ public struct FileTableView: View {
                 Spacer(minLength: 4)
             }
             
-            // Size Column with Fixed-Scale Indicator for Large Files (>= 50 MB, 1 GB = 100%)
+            // Size Column with Fixed-Scale Indicator for Large Files & Calculated Folders (>= 50 MB, 1 GB = 100%)
+            let effectiveBytes = (item.isDirectory ? state.folderSizesCache[item.url] : item.size)
+            let formattedSizeText: String = {
+                if let cached = state.folderSizesCache[item.url] {
+                    return FileItem.byteFormatter.string(fromByteCount: cached)
+                }
+                return item.formattedSize
+            }()
+            let hasCalculatedFolderSize = item.isDirectory && state.folderSizesCache[item.url] != nil
+            
             ZStack(alignment: .trailing) {
-                if let bytes = item.size, bytes >= 50_000_000 {
+                if let bytes = effectiveBytes, bytes >= 50_000_000 {
                     let proportion = min(1.0, Double(bytes) / 1_073_741_824.0) // 1 GB is 100%
                     let isGigabyte = bytes >= 1_000_000_000
                     
@@ -260,9 +269,13 @@ public struct FileTableView: View {
                         .frame(width: (isCompact ? 70 : 85) * proportion, height: 16)
                 }
                 
-                Text(item.formattedSize)
+                Text(formattedSizeText)
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(isSelected ? .white : .secondary)
+                    .foregroundColor(
+                        isSelected
+                        ? .white
+                        : (hasCalculatedFolderSize ? Color.flashbrowseAccent : .secondary)
+                    )
                     .padding(.horizontal, 2)
             }
             .frame(width: isCompact ? 75 : 90, alignment: .trailing)
@@ -609,6 +622,20 @@ public struct FileTableView: View {
         }
         
         Divider()
+        
+        if item.isDirectory {
+            Button(action: {
+                state.calculateSize(for: item)
+            }) {
+                Label("Calculate Size (du -h)", systemImage: "scalemass")
+            }
+        }
+        
+        Button(action: {
+            state.showingDiskUsageSheet = true
+        }) {
+            Label("Directory Disk Usage (du -h)...", systemImage: "chart.bar.xaxis")
+        }
         
         Button(action: {
             FileSystemService.shared.openInTerminal(url: item.url)
