@@ -20,7 +20,7 @@
 
 <br />
 
-[**📥 Download Latest Release (v0.2.0)**](https://github.com/olawa/flashbrowse/releases/latest) • [**✨ Features**](#-key-features) • [**⌨️ Keyboard Cheatsheet**](#️-keyboard-shortcuts) • [**🛠️ Build from Source**](#️-building-from-source)
+[**📥 Download Latest Release (v0.4.0)**](https://github.com/olawa/flashbrowse/releases/latest) • [**✨ Features**](#-key-features) • [**⌨️ Keyboard Cheatsheet**](#️-keyboard-shortcuts) • [**🛠️ Build from Source**](#️-building-from-source)
 
 </div>
 
