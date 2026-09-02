@@ -142,6 +142,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         Self.lastWindowActivationTime = Date()
         
+        if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let image = NSImage(contentsOf: iconURL) {
+            NSApplication.shared.applicationIconImage = image
+        }
+        
         // Listen to window focus events to record activation time
         NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { notif in
             Self.lastWindowActivationTime = Date()
