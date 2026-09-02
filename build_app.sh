@@ -46,6 +46,9 @@ mkdir -p Flashbrowse.app/Contents/Resources
 
 cp Flashbrowse Flashbrowse.app/Contents/MacOS/
 cp Info.plist Flashbrowse.app/Contents/
+if [ -f "Resources/AppIcon.icns" ]; then
+    cp Resources/AppIcon.icns Flashbrowse.app/Contents/Resources/
+fi
 
 chmod +x Flashbrowse.app/Contents/MacOS/Flashbrowse
 
