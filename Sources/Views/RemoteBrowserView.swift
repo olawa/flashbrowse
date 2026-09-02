@@ -203,8 +203,12 @@ public struct RemoteBrowserView: View {
                             .font(.system(size: 12))
                         
                         if isEditingRemotePath {
-                            HStack(spacing: 4) {
-                                TextField("Enter remote path e.g. /data/projects", text: $remotePathInputText)
+                            HStack(spacing: 6) {
+                                Image(systemName: "folder.fill")
+                                    .foregroundColor(Color.green)
+                                    .font(.system(size: 11))
+                                
+                                TextField("Enter remote path e.g. /var/lib/mink", text: $remotePathInputText)
                                     .textFieldStyle(.plain)
                                     .font(.system(size: 11, design: .monospaced))
                                     .focused($isRemotePathFocused)
@@ -217,74 +221,99 @@ public struct RemoteBrowserView: View {
                                 
                                 Button(action: { commitRemotePath() }) {
                                     Image(systemName: "arrow.right.circle.fill")
-                                        .font(.system(size: 12))
+                                        .font(.system(size: 13))
                                         .foregroundColor(Color.green)
                                 }
                                 .buttonStyle(.plain)
-                            }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color(nsColor: .textBackgroundColor))
-                            .cornerRadius(4)
-                        } else {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 3) {
-                                    ForEach(sshService.remoteBreadcrumbs) { crumb in
-                                        let isCurrent = crumb.path == sshService.currentRemotePath
-                                        
-                                        Button(action: {
-                                            sshService.navigateToRemote(path: crumb.path)
-                                        }) {
-                                            HStack(spacing: 3) {
-                                                if crumb.path == "~" || crumb.path == "/" {
-                                                    Image(systemName: "server.rack")
-                                                        .font(.system(size: 10))
-                                                        .foregroundColor(isCurrent ? .white : Color.green)
-                                                } else {
-                                                    Image(systemName: "folder.fill")
-                                                        .font(.system(size: 10))
-                                                        .foregroundColor(isCurrent ? .white : Color.green)
-                                                }
-                                                Text(crumb.name)
-                                                    .font(.system(size: 11, weight: isCurrent ? .bold : .medium, design: .monospaced))
-                                            }
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 3)
-                                            .background(
-                                                isCurrent
-                                                ? Color.green
-                                                : Color(nsColor: .controlBackgroundColor).opacity(0.8)
-                                            )
-                                            .foregroundColor(isCurrent ? .white : .primary)
-                                            .cornerRadius(4)
-                                        }
-                                        .buttonStyle(.plain)
-                                        
-                                        if crumb.path != sshService.currentRemotePath {
-                                            Image(systemName: "chevron.right")
-                                                .font(.system(size: 8, weight: .bold))
-                                                .foregroundColor(.secondary.opacity(0.5))
-                                        }
-                                    }
-                                    
-                                    Button(action: {
-                                        remotePathInputText = sshService.currentRemotePath
-                                        isEditingRemotePath = true
-                                        isRemotePathFocused = true
-                                    }) {
-                                        Image(systemName: "pencil")
-                                            .font(.system(size: 9))
-                                            .foregroundColor(.secondary.opacity(0.6))
-                                            .padding(3)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .help("Click or press Cmd+G to enter remote path directly")
+                                .help("Gå till sökväg (Return)")
+                                
+                                Button(action: { isEditingRemotePath = false }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
                                 }
+                                .buttonStyle(.plain)
+                                .help("Avbryt (Esc)")
                             }
-                            .onTapGesture(count: 2) {
-                                remotePathInputText = sshService.currentRemotePath
-                                isEditingRemotePath = true
-                                isRemotePathFocused = true
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.green, lineWidth: 1.5)
+                            )
+                        } else {
+                            HStack(spacing: 4) {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 3) {
+                                        ForEach(sshService.remoteBreadcrumbs) { crumb in
+                                            let isCurrent = crumb.path == sshService.currentRemotePath
+                                            
+                                            Button(action: {
+                                                sshService.navigateToRemote(path: crumb.path)
+                                            }) {
+                                                HStack(spacing: 3) {
+                                                    if crumb.path == "~" || crumb.path == "/" {
+                                                        Image(systemName: "server.rack")
+                                                            .font(.system(size: 10))
+                                                            .foregroundColor(isCurrent ? .white : Color.green)
+                                                    } else {
+                                                        Image(systemName: "folder.fill")
+                                                            .font(.system(size: 10))
+                                                            .foregroundColor(isCurrent ? .white : Color.green)
+                                                    }
+                                                    Text(crumb.name)
+                                                        .font(.system(size: 11, weight: isCurrent ? .bold : .medium, design: .monospaced))
+                                                }
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 3)
+                                                .background(
+                                                    isCurrent
+                                                    ? Color.green
+                                                    : Color(nsColor: .controlBackgroundColor).opacity(0.8)
+                                                )
+                                                .foregroundColor(isCurrent ? .white : .primary)
+                                                .cornerRadius(4)
+                                            }
+                                            .buttonStyle(.plain)
+                                            
+                                            if crumb.path != sshService.currentRemotePath {
+                                                Image(systemName: "chevron.right")
+                                                    .font(.system(size: 8, weight: .bold))
+                                                    .foregroundColor(.secondary.opacity(0.5))
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                Spacer(minLength: 8)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        startEditingRemotePath()
+                                    }
+                                
+                                Button(action: {
+                                    startEditingRemotePath()
+                                }) {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "pencil")
+                                            .font(.system(size: 9, weight: .semibold))
+                                        Text("Path")
+                                            .font(.system(size: 10, weight: .medium))
+                                    }
+                                    .foregroundColor(Color.green)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+                                    .cornerRadius(4)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Klicka för att skriva in eller klistra in sökväg (Cmd+G)")
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 1) {
+                                startEditingRemotePath()
                             }
                         }
                         
@@ -372,6 +401,14 @@ public struct RemoteBrowserView: View {
         }
     }
     
+    private func startEditingRemotePath() {
+        remotePathInputText = sshService.currentRemotePath
+        isEditingRemotePath = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            isRemotePathFocused = true
+        }
+    }
+
     private func commitRemotePath() {
         let clean = remotePathInputText.trimmingCharacters(in: .whitespaces)
         if !clean.isEmpty {
@@ -390,20 +427,15 @@ public struct RemoteBrowserView: View {
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 
-                Text("PERM")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.secondary)
-                    .frame(width: 85, alignment: .leading)
-                
                 Text("SIZE")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.secondary)
-                    .frame(width: 75, alignment: .trailing)
+                    .frame(width: 80, alignment: .trailing)
                 
                 Text("MODIFIED")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.secondary)
-                    .frame(width: 120, alignment: .leading)
+                    .frame(width: 115, alignment: .leading)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
@@ -426,22 +458,18 @@ public struct RemoteBrowserView: View {
                             Text(item.name)
                                 .font(.system(size: 12, weight: item.isDirectory ? .medium : .regular))
                                 .lineLimit(1)
+                                .truncationMode(.middle)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            
-                            Text(item.permissions)
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                                .frame(width: 85, alignment: .leading)
                             
                             Text(item.formattedSize)
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                                .frame(width: 75, alignment: .trailing)
+                                .frame(width: 80, alignment: .trailing)
                             
                             Text(item.modifiedString)
                                 .font(.system(size: 11))
                                 .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                                .frame(width: 120, alignment: .leading)
+                                .frame(width: 115, alignment: .leading)
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)

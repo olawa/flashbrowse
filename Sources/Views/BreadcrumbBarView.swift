@@ -121,12 +121,17 @@ public struct BreadcrumbBarView: View {
                                 }
                             }
                             
-                            Spacer()
+                            Spacer(minLength: 8)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    state.isEditingPath = true
+                                }
                         }
                         .padding(.horizontal, 2)
                     }
                     .frame(height: 28)
-                    .onTapGesture(count: 2) {
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 1) {
                         state.isEditingPath = true
                     }
                 }
