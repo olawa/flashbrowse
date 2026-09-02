@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AppKit
 
 @MainActor
 public class SSHService: ObservableObject {
@@ -385,6 +386,28 @@ public class SSHService: ObservableObject {
                 }
             }
         }
+    }
+    
+    // MARK: - Open Remote File Locally in Mac Applications (Word, Excel, etc.)
+    public func openRemoteFileLocally(item: RemoteFileItem, withApp appName: String? = nil) async throws -> URL {
+        let localURL = try await downloadToCache(item: item)
+        
+        await MainActor.run {
+            if let app = appName, !app.isEmpty {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                process.arguments = ["-a", app, localURL.path]
+                do {
+                    try process.run()
+                } catch {
+                    NSWorkspace.shared.open(localURL)
+                }
+            } else {
+                NSWorkspace.shared.open(localURL)
+            }
+        }
+        
+        return localURL
     }
     
     // MARK: - Download File to Local Folder

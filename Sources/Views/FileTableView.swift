@@ -601,6 +601,36 @@ public struct FileTableView: View {
             Label(item.isDirectory ? "Open Folder" : "Open File", systemImage: item.isDirectory ? "folder" : "arrow.up.forward.app")
         }
         
+        if !item.isDirectory {
+            let ext = item.url.pathExtension.lowercased()
+            let isExcel = ["xlsx", "xls", "csv", "tsv", "tab"].contains(ext) || item.name.hasSuffix(".csv.gz") || item.name.hasSuffix(".tsv.gz")
+            let isWord = ["docx", "doc", "rtf", "odt", "txt"].contains(ext)
+            let isCode = ["py", "rs", "sh", "json", "yaml", "yml", "toml", "md", "c", "cpp", "h", "swift", "js", "ts", "r", "smk"].contains(ext)
+            
+            if isExcel {
+                Button(action: { openWithApp(urls: targets, appName: "Microsoft Excel") }) {
+                    Label("Öppna i Microsoft Excel", systemImage: "tablecells.fill")
+                }
+            } else if isWord {
+                Button(action: { openWithApp(urls: targets, appName: "Microsoft Word") }) {
+                    Label("Öppna i Microsoft Word", systemImage: "doc.richtext.fill")
+                }
+            } else if isCode {
+                Button(action: { openWithApp(urls: targets, appName: "Visual Studio Code") }) {
+                    Label("Öppna i VS Code", systemImage: "curlybraces")
+                }
+            }
+            
+            Menu("Öppna med...") {
+                Button("Microsoft Excel") { openWithApp(urls: targets, appName: "Microsoft Excel") }
+                Button("Microsoft Word") { openWithApp(urls: targets, appName: "Microsoft Word") }
+                Button("Visual Studio Code") { openWithApp(urls: targets, appName: "Visual Studio Code") }
+                Button("TextEdit") { openWithApp(urls: targets, appName: "TextEdit") }
+                Divider()
+                Button("Standardprogram (Default)") { for u in targets { NSWorkspace.shared.open(u) } }
+            }
+        }
+        
         Button(action: {
             QuickLookBridge.shared.toggleQuickLook(for: item.url)
         }) {
@@ -708,6 +738,19 @@ public struct FileTableView: View {
             state.reload()
         }) {
             Label("Move to Trash", systemImage: "trash")
+        }
+    }
+    
+    private func openWithApp(urls: [URL], appName: String) {
+        for url in urls {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = ["-a", appName, url.path]
+            do {
+                try process.run()
+            } catch {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 }

@@ -473,6 +473,51 @@ public struct RemoteBrowserView: View {
                                     sshService.navigateToRemote(path: item.remotePath)
                                 }
                             } else {
+                                let ext = (item.name as NSString).pathExtension.lowercased()
+                                let isExcel = ["xlsx", "xls", "csv", "tsv", "tab"].contains(ext) || item.name.hasSuffix(".csv.gz") || item.name.hasSuffix(".tsv.gz")
+                                let isWord = ["docx", "doc", "rtf", "odt", "txt"].contains(ext)
+                                let isCode = ["py", "rs", "sh", "json", "yaml", "yml", "toml", "md", "c", "cpp", "h", "swift", "js", "ts", "r", "smk"].contains(ext)
+
+                                // Smart primary action
+                                if isExcel {
+                                    Button(action: { openRemoteItemLocally(item, appName: "Microsoft Excel") }) {
+                                        Label("Öppna i Microsoft Excel (lokalt)", systemImage: "tablecells.fill")
+                                    }
+                                } else if isWord {
+                                    Button(action: { openRemoteItemLocally(item, appName: "Microsoft Word") }) {
+                                        Label("Öppna i Microsoft Word (lokalt)", systemImage: "doc.richtext.fill")
+                                    }
+                                } else if isCode {
+                                    Button(action: { openRemoteItemLocally(item, appName: "Visual Studio Code") }) {
+                                        Label("Öppna i VS Code (lokalt)", systemImage: "curlybraces")
+                                    }
+                                }
+
+                                Button(action: { openRemoteItemLocally(item, appName: nil) }) {
+                                    Label("Öppna lokalt (Standardprogram)", systemImage: "arrow.up.forward.app")
+                                }
+
+                                Menu("Öppna lokalt med...") {
+                                    Button("Microsoft Excel") {
+                                        openRemoteItemLocally(item, appName: "Microsoft Excel")
+                                    }
+                                    Button("Microsoft Word") {
+                                        openRemoteItemLocally(item, appName: "Microsoft Word")
+                                    }
+                                    Button("Visual Studio Code") {
+                                        openRemoteItemLocally(item, appName: "Visual Studio Code")
+                                    }
+                                    Button("TextEdit") {
+                                        openRemoteItemLocally(item, appName: "TextEdit")
+                                    }
+                                    Divider()
+                                    Button("Standardprogram (Default)") {
+                                        openRemoteItemLocally(item, appName: nil)
+                                    }
+                                }
+
+                                Divider()
+
                                 Button("Download to Local (\(localState.currentDirectory.lastPathComponent))") {
                                     downloadItemToLocal(item)
                                 }
@@ -496,6 +541,23 @@ public struct RemoteBrowserView: View {
     }
     
     // MARK: - Transfer & Actions
+    private func openRemoteItemLocally(_ item: RemoteFileItem, appName: String? = nil) {
+        guard !item.isDirectory else { return }
+        let appDisplay = appName ?? "standardprogram"
+        localState.showToast("⬇️ Hämtar \(item.name)...")
+        Task {
+            do {
+                _ = try await sshService.openRemoteFileLocally(item: item, withApp: appName)
+                await MainActor.run {
+                    localState.showToast("🚀 Öppnade \(item.name) i \(appDisplay)")
+                }
+            } catch {
+                await MainActor.run {
+                    localState.showToast("❌ Kunde inte öppna: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
     private func previewRemoteItem(_ item: RemoteFileItem) {
         guard !item.isDirectory else { return }
         Task {
