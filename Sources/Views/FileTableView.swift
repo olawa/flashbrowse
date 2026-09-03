@@ -11,13 +11,17 @@ public struct FileTableView: View {
     @FocusState private var isRenameFieldFocused: Bool
     @State private var lastClickedURL: URL?
     @State private var lastClickTimestamp: Date = Date.distantPast
-    
+
+    // Hover Dir Tree
+    @State private var hoverTreeURL: URL? = nil
+    @State private var hoverTreeAnchorPoint: CGPoint = .zero
+    private let hoverTreeWorkItem = DispatchWorkItemBox()
     public init(state: NavigationState) {
         self.state = state
     }
     
     public var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             Color(nsColor: .textBackgroundColor)
                 .ignoresSafeArea()
             
@@ -38,6 +42,22 @@ public struct FileTableView: View {
                 } else {
                     gridView
                 }
+            }
+
+            // Hover Dir Tree Overlay
+            if let treeURL = hoverTreeURL {
+                HoverDirTreeView(
+                    rootURL: treeURL,
+                    onNavigate: { url in
+                        hoverTreeURL = nil
+                        state.navigateTo(url: url)
+                    },
+                    onClose: { hoverTreeURL = nil }
+                )
+                .offset(x: min(hoverTreeAnchorPoint.x, 20), y: max(hoverTreeAnchorPoint.y, 4))
+                .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .topLeading)))
+                .animation(.easeOut(duration: 0.12), value: hoverTreeURL)
+                .zIndex(100)
             }
         }
         .focusable()
@@ -327,8 +347,25 @@ public struct FileTableView: View {
                 } else if state.smartHoverPreview && NavigationState.isSmartHoverPreviewCandidate(item: item) {
                     state.scheduleInspectorUpdate(url: item.url)
                 }
+
+                // Hover Dir Tree: schedule for directories
+                if item.isDirectory {
+                    hoverTreeWorkItem.cancel()
+                    let work = DispatchWorkItem {
+                        if hoveredURL == item.url {
+                            hoverTreeURL = item.url
+                        }
+                    }
+                    hoverTreeWorkItem.item = work
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+                } else {
+                    hoverTreeWorkItem.cancel()
+                    if hoverTreeURL != nil { hoverTreeURL = nil }
+                }
             } else if hoveredURL == item.url {
                 hoveredURL = nil
+                // Don't cancel hoverTreeURL — mouse may be entering the tooltip
+                hoverTreeWorkItem.cancel()
             }
         }
         // Single Click, Multi-Select (Shift/Cmd), and Delayed Rename (Finder Style)
