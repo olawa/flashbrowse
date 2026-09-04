@@ -54,6 +54,15 @@ public struct FileTableView: View {
                     },
                     onClose: { hoverTreeURL = nil }
                 )
+                .onHover { hovering in
+                    if hovering {
+                        // Mouse entered tooltip — cancel the 150ms close timer
+                        hoverTreeWorkItem.cancel()
+                    } else {
+                        // Mouse left tooltip — close immediately
+                        hoverTreeURL = nil
+                    }
+                }
                 .offset(x: min(hoverTreeAnchorPoint.x, 20), y: max(hoverTreeAnchorPoint.y, 4))
                 .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .topLeading)))
                 .animation(.easeOut(duration: 0.12), value: hoverTreeURL)
@@ -357,15 +366,20 @@ public struct FileTableView: View {
                         }
                     }
                     hoverTreeWorkItem.item = work
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
                 } else {
                     hoverTreeWorkItem.cancel()
                     if hoverTreeURL != nil { hoverTreeURL = nil }
                 }
             } else if hoveredURL == item.url {
                 hoveredURL = nil
-                // Don't cancel hoverTreeURL — mouse may be entering the tooltip
                 hoverTreeWorkItem.cancel()
+                // Grace period: close tree after 150ms unless mouse entered tooltip
+                let closeWork = DispatchWorkItem {
+                    hoverTreeURL = nil
+                }
+                hoverTreeWorkItem.item = closeWork
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: closeWork)
             }
         }
         // Single Click, Multi-Select (Shift/Cmd), and Delayed Rename (Finder Style)
