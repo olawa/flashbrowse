@@ -152,6 +152,68 @@ public struct FileItem: Identifiable, Hashable {
         }
     }
     
+    /// Fast memory initializer for cached indexes without disk stat I/O
+    public init(url: URL, size: Int64?, dateModified: Date?, kindDescription: String? = nil) {
+        self.url = url
+        let n = url.lastPathComponent
+        self.name = n
+        self.lowercaseName = n.lowercased()
+        self.isHidden = n.hasPrefix(".")
+        self.itemCount = nil
+        self.isPackage = false
+        self.isDirectory = false
+        self.isSymlink = false
+        self.size = size
+        self.dateModified = dateModified
+        
+        let ext = url.pathExtension.lowercased()
+        switch ext {
+        case "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic":
+            self.category = .image
+            self.sfSymbolName = "photo.fill"
+            self.categoryColor = Color(red: 0.2, green: 0.6, blue: 0.86)
+        case "mp4", "mov", "mkv", "avi", "webm", "m4v":
+            self.category = .video
+            self.sfSymbolName = "film.fill"
+            self.categoryColor = Color(red: 0.6, green: 0.3, blue: 0.8)
+        case "mp3", "wav", "flac", "aac", "ogg", "m4a":
+            self.category = .audio
+            self.sfSymbolName = "music.note"
+            self.categoryColor = Color(red: 0.9, green: 0.4, blue: 0.6)
+        case "swift", "rs", "py", "c", "cpp", "h", "hpp", "js", "ts", "json", "toml", "yaml", "yml", "sh", "zsh", "go", "java", "html", "css":
+            self.category = .code
+            self.sfSymbolName = "curlybraces"
+            self.categoryColor = Color(red: 0.18, green: 0.8, blue: 0.44)
+        case "pdf", "txt", "md", "doc", "docx", "pages", "rtf", "csv", "tsv":
+            self.category = .document
+            self.sfSymbolName = "doc.text.fill"
+            self.categoryColor = Color(red: 0.3, green: 0.5, blue: 0.9)
+        case "zip", "tar", "gz", "bz2", "xz", "7z", "dmg", "pkg":
+            self.category = .archive
+            self.sfSymbolName = "archivebox.fill"
+            self.categoryColor = Color(red: 0.95, green: 0.65, blue: 0.15)
+        case "command", "app":
+            self.category = .executable
+            self.sfSymbolName = "terminal.fill"
+            self.categoryColor = Color(red: 0.4, green: 0.75, blue: 0.4)
+        default:
+            if ["bam", "sam", "cram", "bai", "crai"].contains(ext) {
+                self.category = .other
+                self.sfSymbolName = "dna"
+                self.categoryColor = Color.flashbrowseAccent
+            } else if ["vcf", "bcf"].contains(ext) {
+                self.category = .other
+                self.sfSymbolName = "waveform.path.ecg"
+                self.categoryColor = Color(red: 0.85, green: 0.25, blue: 0.45)
+            } else {
+                self.category = .other
+                self.sfSymbolName = "doc.fill"
+                self.categoryColor = Color.secondary
+            }
+        }
+        self.kindDescription = kindDescription ?? (ext.isEmpty ? "File" : "\(ext.uppercased()) File")
+    }
+    
     public func hash(into hasher: inout Hasher) {
         hasher.combine(url)
     }

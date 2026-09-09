@@ -353,7 +353,7 @@ public struct SidebarView: View {
             if isSelected {
                 indexService.clearIndex()
             } else {
-                indexService.startIndexScan(for: index, in: state.currentDirectory)
+                indexService.openIndex(for: index, preferredRoot: state.currentDirectory)
             }
         }) {
             HStack(spacing: 7) {

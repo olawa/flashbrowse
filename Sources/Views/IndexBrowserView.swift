@@ -48,20 +48,20 @@ public struct IndexBrowserView: View {
                     
                     // Scope / Root folder selector
                     Menu {
-                        Button("Scan Current Folder (\(navState.currentDirectory.lastPathComponent))") {
-                            indexService.startIndexScan(for: index, in: navState.currentDirectory)
+                        Button("Aktuell mapp (\(navState.currentDirectory.lastPathComponent))") {
+                            indexService.openIndex(for: index, preferredRoot: navState.currentDirectory)
                         }
-                        Button("Scan User Home (~)") {
-                            indexService.startIndexScan(for: index, in: FileManager.default.homeDirectoryForCurrentUser)
+                        Button("Hemkatalog (~)") {
+                            indexService.openIndex(for: index, preferredRoot: FileManager.default.homeDirectoryForCurrentUser)
                         }
                         Divider()
-                        Button("Choose Folder to Scan...") {
+                        Button("Välj mapp...") {
                             let panel = NSOpenPanel()
                             panel.canChooseFiles = false
                             panel.canChooseDirectories = true
                             panel.allowsMultipleSelection = false
                             if panel.runModal() == .OK, let chosen = panel.url {
-                                indexService.startIndexScan(for: index, in: chosen)
+                                indexService.openIndex(for: index, preferredRoot: chosen)
                             }
                         }
                     } label: {
@@ -69,7 +69,7 @@ public struct IndexBrowserView: View {
                             Image(systemName: "folder.badge.gearshape")
                                 .font(.system(size: 10))
                                 .foregroundColor(Color.flashbrowseAccent)
-                            Text("Root: \(indexService.currentRootURL?.lastPathComponent ?? "Current")")
+                            Text("Mapp: \(indexService.currentRootURL?.lastPathComponent ?? "Aktuell")")
                                 .font(.system(size: 11, weight: .medium))
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 8))
@@ -81,18 +81,70 @@ public struct IndexBrowserView: View {
                         .cornerRadius(6)
                     }
                     .menuStyle(.borderlessButton)
-                    .help("Change base root folder to scan for files (Current folder, Home ~, or custom)")
+                    .help("Välj rotmapp för indexet")
                     
-                    let selectedFolderCount = indexService.selectedDirectories.isEmpty ? indexService.indexedGroups.count : indexService.selectedDirectories.count
-                    Text("• \(filteredItemsInSelectedGroups.count) files in \(selectedFolderCount) of \(indexService.indexedGroups.count) folders")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                    if indexService.hasLoadedIndex {
+                        let selectedFolderCount = indexService.selectedDirectories.isEmpty ? indexService.indexedGroups.count : indexService.selectedDirectories.count
+                        Text("• \(filteredItemsInSelectedGroups.count) filer i \(selectedFolderCount)/\(indexService.indexedGroups.count) mappar")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                        
+                        if let date = indexService.lastIndexDate {
+                            Text("• Indexerat: \(date, style: .date) \(date, style: .time)")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        if indexService.isFromPreviousAppVersion {
+                            HStack(spacing: 2) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 9))
+                                Text("v\(indexService.lastIndexAppVersion ?? "")")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.orange.opacity(0.12))
+                            .cornerRadius(4)
+                            .help("Indexet byggdes i en tidigare version av Flashbrowse (nuvarande v\(IndexService.currentAppVersion)). Klicka Bygg om för att uppdatera.")
+                        }
+                    }
                     
                     if indexService.isScanning {
-                        ProgressView()
-                            .scaleEffect(0.6)
-                            .frame(width: 16, height: 16)
+                        HStack(spacing: 4) {
+                            ProgressView()
+                                .scaleEffect(0.5)
+                                .frame(width: 14, height: 14)
+                            Text("Skannar... (\(indexService.totalFilesFound) funna)")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
                     }
+                }
+                
+                Spacer()
+                
+                // Rebuild / Refresh Index button
+                if let index = indexService.activeIndex {
+                    Button(action: {
+                        let target = indexService.currentRootURL ?? navState.currentDirectory
+                        indexService.startIndexScan(for: index, in: target)
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 10))
+                            Text("Bygg om index")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(indexService.isScanning)
+                    .help("Skanna om mappen och spara nytt index")
                 }
                 
                 Spacer()
@@ -181,15 +233,131 @@ public struct IndexBrowserView: View {
             
             Divider()
             
-            // Split View: Left = Directories, Right = Files
-            if indexService.indexedGroups.isEmpty && !indexService.isScanning {
+            // Content Area: Scanning, Build Prompt, Empty or Split View
+            if indexService.isScanning {
+                VStack(spacing: 14) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Skannar efter \(indexService.activeIndex?.name ?? "filer")...")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Söker i: \(indexService.currentRootURL?.path ?? "")")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text("Hittat \(indexService.totalFilesFound) filer i \(indexService.indexedGroups.count) mappar hittills")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.flashbrowseAccent)
+                    Button("Avbryt") {
+                        indexService.clearIndex()
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(5)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .textBackgroundColor))
+            } else if !indexService.hasLoadedIndex {
+                if let index = indexService.activeIndex {
+                    VStack(spacing: 16) {
+                        Image(systemName: index.icon)
+                            .font(.system(size: 48))
+                            .foregroundColor(index.color)
+                        
+                        Text("Inget index tillgängligt för \(index.name)")
+                            .font(.system(size: 17, weight: .bold))
+                        
+                        Text("Öppna ett befintligt index eller bygg ett nytt för att snabbt söka och bläddra bland alla filer.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 440)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Mapp att indexera:")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            
+                            HStack {
+                                Image(systemName: "folder.fill")
+                                    .foregroundColor(Color.flashbrowseAccent)
+                                    .font(.system(size: 12))
+                                Text(indexService.currentRootURL?.path ?? navState.currentDirectory.path)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: 440, alignment: .leading)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .cornerRadius(6)
+                        }
+                        
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                let target = indexService.currentRootURL ?? navState.currentDirectory
+                                indexService.startIndexScan(for: index, in: target)
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "bolt.fill")
+                                    Text("Bygg index")
+                                        .fontWeight(.bold)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(index.color)
+                                .foregroundColor(.white)
+                                .cornerRadius(7)
+                            }
+                            .buttonStyle(.plain)
+                            
+                            Button(action: {
+                                let panel = NSOpenPanel()
+                                panel.canChooseFiles = false
+                                panel.canChooseDirectories = true
+                                panel.allowsMultipleSelection = false
+                                if panel.runModal() == .OK, let chosen = panel.url {
+                                    indexService.openIndex(for: index, preferredRoot: chosen)
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "folder")
+                                    Text("Välj annan mapp...")
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color(nsColor: .controlBackgroundColor))
+                                .cornerRadius(7)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(nsColor: .textBackgroundColor))
+                }
+            } else if indexService.indexedGroups.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "doc.text.magnifyingglass")
                         .font(.system(size: 48))
                         .foregroundColor(.secondary.opacity(0.4))
-                    Text("No matching files found for this index")
+                    Text("Inga matchande filer hittades i denna mapp")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
+                    
+                    if let index = indexService.activeIndex {
+                        Button("Bygg om index") {
+                            let target = indexService.currentRootURL ?? navState.currentDirectory
+                            indexService.startIndexScan(for: index, in: target)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(6)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(nsColor: .textBackgroundColor))
