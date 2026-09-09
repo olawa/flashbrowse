@@ -19,6 +19,7 @@ public struct RemoteBrowserView: View {
     @State private var remotePathInputText: String = ""
     @FocusState private var isRemotePathFocused: Bool
     @State private var lastRemoteNavTime: Date = Date.distantPast
+    private let previewDebounceWork = DispatchWorkItemBox() // debounce SSH preview downloads
     
     public init(localState: NavigationState, isDualInspectorEnabled: Bool = true) {
         self.localState = localState
@@ -487,9 +488,18 @@ public struct RemoteBrowserView: View {
                             if hovering {
                                 hoveredRemotePath = item.remotePath
                                 selectedRemoteItems = [item.remotePath]
-                                previewRemoteItem(item)
+                                // Debounce: only start preview download if user pauses 400ms on a file
+                                // This prevents SCP from blocking ssh_list_directory on folder clicks
+                                previewDebounceWork.cancel()
+                                guard !item.isDirectory else { return }
+                                let work = DispatchWorkItem {
+                                    previewRemoteItem(item)
+                                }
+                                previewDebounceWork.item = work
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
                             } else if hoveredRemotePath == item.remotePath {
                                 hoveredRemotePath = nil
+                                previewDebounceWork.cancel() // abort pending download if mouse left quickly
                             }
                         }
                         .onTapGesture {
