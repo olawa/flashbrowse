@@ -92,11 +92,18 @@ public struct FileItem: Identifiable, Hashable {
         
         let values = try? url.resourceValues(forKeys: resourceKeys)
         
-        let isDir = values?.isDirectory ?? false
+        var isDir = values?.isDirectory ?? false
+        let isSymlink = values?.isSymbolicLink ?? false
+        if isSymlink && !isDir {
+            var targetIsDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &targetIsDir), targetIsDir.boolValue {
+                isDir = true
+            }
+        }
         let isPkg = values?.isPackage ?? false
         self.isPackage = isPkg
         self.isDirectory = isDir && !isPkg
-        self.isSymlink = values?.isSymbolicLink ?? false
+        self.isSymlink = isSymlink
         self.size = (self.isDirectory) ? nil : Int64(values?.fileSize ?? 0)
         self.dateModified = values?.contentModificationDate
         

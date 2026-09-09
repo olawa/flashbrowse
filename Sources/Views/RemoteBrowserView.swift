@@ -31,7 +31,7 @@ public struct RemoteBrowserView: View {
         // Prevent accidental double-clicks from opening sub-items
         guard now.timeIntervalSince(lastRemoteNavTime) > 0.35 else { return }
         
-        if item.isDirectory {
+        if item.isDirectory || (item.isSymlink && item.symlinkTarget?.hasSuffix("/") == true) {
             lastRemoteNavTime = now
             sshService.navigateToRemote(path: item.remotePath)
         } else {
@@ -452,7 +452,7 @@ public struct RemoteBrowserView: View {
                         
                         HStack(spacing: 8) {
                             Image(systemName: item.sfSymbolName)
-                                .foregroundColor(item.isDirectory ? Color.flashbrowseAccent : .primary)
+                                .foregroundColor(item.isDirectory ? Color.flashbrowseAccent : (item.isSymlink ? Color.flashbrowseAccent.opacity(0.8) : .primary))
                                 .font(.system(size: 13))
                                 .frame(width: 18)
                             
@@ -461,6 +461,12 @@ public struct RemoteBrowserView: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                            if item.isSymlink {
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                            }
                             
                             Text(item.formattedSize)
                                 .font(.system(size: 11, design: .monospaced))
@@ -506,7 +512,7 @@ public struct RemoteBrowserView: View {
                             handleRemoteTap(item: item)
                         }
                         .contextMenu {
-                            if item.isDirectory {
+                            if item.isDirectory || (item.isSymlink && item.symlinkTarget?.hasSuffix("/") == true) {
                                 Button("Open Folder") {
                                     sshService.navigateToRemote(path: item.remotePath)
                                 }

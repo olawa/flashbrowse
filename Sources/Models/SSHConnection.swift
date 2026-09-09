@@ -51,6 +51,8 @@ public struct RemoteFileItem: Identifiable, Hashable, Sendable {
     public let name: String
     public let remotePath: String
     public let isDirectory: Bool
+    public let isSymlink: Bool
+    public let symlinkTarget: String?
     public let sizeBytes: Int64
     public let permissions: String
     public let modifiedString: String
@@ -59,6 +61,8 @@ public struct RemoteFileItem: Identifiable, Hashable, Sendable {
         name: String,
         remotePath: String,
         isDirectory: Bool,
+        isSymlink: Bool = false,
+        symlinkTarget: String? = nil,
         sizeBytes: Int64 = 0,
         permissions: String = "",
         modifiedString: String = ""
@@ -66,6 +70,8 @@ public struct RemoteFileItem: Identifiable, Hashable, Sendable {
         self.name = name
         self.remotePath = remotePath
         self.isDirectory = isDirectory
+        self.isSymlink = isSymlink
+        self.symlinkTarget = symlinkTarget
         self.sizeBytes = sizeBytes
         self.permissions = permissions
         self.modifiedString = modifiedString
@@ -86,6 +92,7 @@ public struct RemoteFileItem: Identifiable, Hashable, Sendable {
     
     public var sfSymbolName: String {
         if isDirectory { return "folder.fill" }
+        if isSymlink { return "link" }
         let ext = (remotePath as NSString).pathExtension.lowercased()
         switch ext {
         case "bam", "sam", "cram": return "dna"

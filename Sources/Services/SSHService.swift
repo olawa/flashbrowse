@@ -236,7 +236,7 @@ public class SSHService: ObservableObject {
         self.errorMessage = nil
         
         let pathArg = Self.escapeRemoteShellPath(path)
-        let script = "cd \(pathArg) && pwd && ls -la"
+        let script = "cd \(pathArg) && pwd && ls -la && printf '\\n___SYMLINK_DIRS___\\n' && for f in .*; do [ \"$f\" != \".\" ] && [ \"$f\" != \"..\" ] && [ -d \"$f\" ] && [ -L \"$f\" ] && printf '%s\\n' \"$f\"; done; for f in *; do [ -d \"$f\" ] && [ -L \"$f\" ] && printf '%s\\n' \"$f\"; done; true"
         do {
             let output = try await runSSHCommand(host: host, command: script)
             parseRemoteLsOutput(output: output, basePath: path)
@@ -248,7 +248,21 @@ public class SSHService: ObservableObject {
     }
     
     private func parseRemoteLsOutput(output: String, basePath: String) {
-        let lines = output.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let sections = output.components(separatedBy: "\n___SYMLINK_DIRS___\n")
+        let lsOutput = sections[0]
+        var symlinkDirs: Set<String> = []
+        if sections.count > 1 {
+            let symLines = sections[1].components(separatedBy: "\n")
+            for s in symLines {
+                let trimmed = s.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty {
+                    let clean = trimmed.hasPrefix("./") ? String(trimmed.dropFirst(2)) : trimmed
+                    symlinkDirs.insert(clean)
+                }
+            }
+        }
+        
+        let lines = lsOutput.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard lines.count >= 1 else { return }
         
         var resolvedPath = basePath
@@ -269,18 +283,35 @@ public class SSHService: ObservableObject {
             guard cols.count >= 8 else { continue }
             
             let permissions = cols[0]
-            let isDir = permissions.hasPrefix("d")
+            var isDir = permissions.hasPrefix("d")
+            var isSymlink = permissions.hasPrefix("l")
             let size = Int64(cols[4]) ?? 0
             let dateStr = "\(cols[5]) \(cols[6]) \(cols[7])"
-            let name = cols.dropFirst(8).joined(separator: " ")
-            if name == "." || name == ".." { continue }
+            let rawName = cols.dropFirst(8).joined(separator: " ")
+            if rawName == "." || rawName == ".." { continue }
             
-            let fullRemotePath = (resolvedPath == "/" ? "/\(name)" : "\(resolvedPath)/\(name)")
+            var fileName = rawName
+            var symlinkTarget: String? = nil
+            
+            if isSymlink || rawName.contains(" -> ") {
+                isSymlink = true
+                if let arrowRange = rawName.range(of: " -> ") {
+                    fileName = String(rawName[..<arrowRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+                    symlinkTarget = String(rawName[arrowRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+                }
+                if symlinkDirs.contains(fileName) || symlinkTarget?.hasSuffix("/") == true {
+                    isDir = true
+                }
+            }
+            
+            let fullRemotePath = (resolvedPath == "/" ? "/\(fileName)" : "\(resolvedPath)/\(fileName)")
             
             let item = RemoteFileItem(
-                name: name,
+                name: rawName,
                 remotePath: fullRemotePath,
                 isDirectory: isDir,
+                isSymlink: isSymlink,
+                symlinkTarget: symlinkTarget,
                 sizeBytes: size,
                 permissions: permissions,
                 modifiedString: dateStr
