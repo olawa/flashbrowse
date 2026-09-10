@@ -441,11 +441,32 @@ public class SSHService: ObservableObject {
         return localURL
     }
     
+    // MARK: - Download Directory for Active Host
+    public var currentDownloadDirectory: URL {
+        if let host = activeHost {
+            return host.downloadDirectory
+        }
+        return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Downloads")
+    }
+    
+    public var currentDownloadFolderName: String {
+        if let host = activeHost {
+            return host.downloadFolderName
+        }
+        return "Downloads"
+    }
+    
     // MARK: - Download File to Local Folder
-    public func downloadFile(item: RemoteFileItem, to destinationFolder: URL) async throws {
-        guard let host = activeHost else { return }
+    @discardableResult
+    public func downloadFile(item: RemoteFileItem, to destinationFolder: URL? = nil) async throws -> URL {
+        guard let host = activeHost else {
+            throw NSError(domain: "SSHService", code: -1, userInfo: [NSLocalizedDescriptionKey: "No active host"])
+        }
         
-        let localTarget = destinationFolder.appendingPathComponent(item.name)
+        let targetFolder = destinationFolder ?? host.downloadDirectory
+        try FileManager.default.createDirectory(at: targetFolder, withIntermediateDirectories: true)
+        let localTarget = targetFolder.appendingPathComponent(item.name)
         
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -473,7 +494,7 @@ public class SSHService: ObservableObject {
                     if process.terminationStatus != 0 {
                         continuation.resume(throwing: NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "Download failed"]))
                     } else {
-                        continuation.resume(returning: ())
+                        continuation.resume(returning: localTarget)
                     }
                 } catch {
                     continuation.resume(throwing: error)

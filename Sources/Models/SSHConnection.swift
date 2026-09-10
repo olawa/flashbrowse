@@ -44,6 +44,27 @@ public struct SSHHost: Identifiable, Codable, Hashable, Sendable {
         args.append(target)
         return args
     }
+    
+    public var downloadFolderName: String {
+        let cleanUser = user.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = !alias.isEmpty ? alias : hostName
+        let raw: String
+        if !cleanUser.isEmpty && !name.contains("@") {
+            raw = "\(cleanUser)@\(name)"
+        } else {
+            raw = name
+        }
+        let sanitized = raw.replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+            .replacingOccurrences(of: "\\", with: "_")
+        return sanitized.isEmpty ? "remote" : sanitized
+    }
+    
+    public var downloadDirectory: URL {
+        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Downloads")
+        return downloads.appendingPathComponent(downloadFolderName, isDirectory: true)
+    }
 }
 
 public struct RemoteFileItem: Identifiable, Hashable, Sendable {

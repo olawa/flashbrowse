@@ -91,7 +91,7 @@ public struct RemoteBrowserView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.left.circle.fill")
                                 .foregroundColor(.green)
-                            Text("<- Download to Local")
+                            Text("<- Ladda ner (Downloads/\(sshService.currentDownloadFolderName))")
                                 .font(.system(size: 11, weight: .semibold))
                         }
                         .padding(.horizontal, 8)
@@ -101,7 +101,7 @@ public struct RemoteBrowserView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(selectedRemoteItems.isEmpty || isDownloading)
-                    .help("Download selected remote files to local folder")
+                    .help("Ladda ner markerade filer till Downloads/\(sshService.currentDownloadFolderName)")
                 }
                 
                 if sshService.isLoading || isDownloading || isUploading {
@@ -512,75 +512,94 @@ public struct RemoteBrowserView: View {
                             handleRemoteTap(item: item)
                         }
                         .contextMenu {
-                            if item.isDirectory || (item.isSymlink && item.symlinkTarget?.hasSuffix("/") == true) {
-                                Button("Open Folder") {
-                                    sshService.navigateToRemote(path: item.remotePath)
-                                }
-                            } else {
-                                let ext = (item.name as NSString).pathExtension.lowercased()
-                                let isExcel = ["xlsx", "xls", "csv", "tsv", "tab"].contains(ext) || item.name.hasSuffix(".csv.gz") || item.name.hasSuffix(".tsv.gz")
-                                let isWord = ["docx", "doc", "rtf", "odt", "txt"].contains(ext)
-                                let isCode = ["py", "rs", "sh", "json", "yaml", "yml", "toml", "md", "c", "cpp", "h", "swift", "js", "ts", "r", "smk"].contains(ext)
-
-                                // Smart primary action
-                                if isExcel {
-                                    Button(action: { openRemoteItemLocally(item, appName: "Microsoft Excel") }) {
-                                        Label("Öppna i Microsoft Excel (lokalt)", systemImage: "tablecells.fill")
-                                    }
-                                } else if isWord {
-                                    Button(action: { openRemoteItemLocally(item, appName: "Microsoft Word") }) {
-                                        Label("Öppna i Microsoft Word (lokalt)", systemImage: "doc.richtext.fill")
-                                    }
-                                } else if isCode {
-                                    Button(action: { openRemoteItemLocally(item, appName: "Visual Studio Code") }) {
-                                        Label("Öppna i VS Code (lokalt)", systemImage: "curlybraces")
-                                    }
-                                }
-
-                                Button(action: { openRemoteItemLocally(item, appName: nil) }) {
-                                    Label("Öppna lokalt (Standardprogram)", systemImage: "arrow.up.forward.app")
-                                }
-
-                                Menu("Öppna lokalt med...") {
-                                    Button("Microsoft Excel") {
-                                        openRemoteItemLocally(item, appName: "Microsoft Excel")
-                                    }
-                                    Button("Microsoft Word") {
-                                        openRemoteItemLocally(item, appName: "Microsoft Word")
-                                    }
-                                    Button("Visual Studio Code") {
-                                        openRemoteItemLocally(item, appName: "Visual Studio Code")
-                                    }
-                                    Button("TextEdit") {
-                                        openRemoteItemLocally(item, appName: "TextEdit")
-                                    }
-                                    Divider()
-                                    Button("Standardprogram (Default)") {
-                                        openRemoteItemLocally(item, appName: nil)
-                                    }
-                                }
-
-                                Divider()
-
-                                Button("Download to Local (\(localState.currentDirectory.lastPathComponent))") {
-                                    downloadItemToLocal(item)
-                                }
-                            }
-                            
-                            Button("Copy Remote Path") {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(item.remotePath, forType: .string)
-                            }
-                            
-                            Button("Open Remote Terminal Here") {
-                                openRemoteTerminal(at: item.isDirectory ? item.remotePath : (item.remotePath as NSString).deletingLastPathComponent)
-                            }
+                            remoteContextMenu(for: item)
                         }
                     }
                 }
                 .padding(4)
             }
             .background(Color(nsColor: .textBackgroundColor))
+        }
+    }
+    
+    @ViewBuilder
+    private func remoteContextMenu(for item: RemoteFileItem) -> some View {
+        if item.isDirectory || (item.isSymlink && item.symlinkTarget?.hasSuffix("/") == true) {
+            Button("Open Folder") {
+                sshService.navigateToRemote(path: item.remotePath)
+            }
+        } else {
+            openLocallyButtons(for: item)
+            
+            Divider()
+            
+            Button("Ladda ner till Downloads/\(sshService.currentDownloadFolderName)") {
+                downloadItemToLocal(item)
+            }
+            
+            Button("Ladda ner till \(localState.currentDirectory.lastPathComponent)") {
+                downloadItemToLocal(item, destination: localState.currentDirectory)
+            }
+            
+            Button("Öppna Downloads/\(sshService.currentDownloadFolderName)") {
+                let dest = sshService.currentDownloadDirectory
+                try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+                localState.navigateTo(url: dest)
+            }
+        }
+        
+        Button("Copy Remote Path") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(item.remotePath, forType: .string)
+        }
+        
+        Button("Open Remote Terminal Here") {
+            openRemoteTerminal(at: item.isDirectory ? item.remotePath : (item.remotePath as NSString).deletingLastPathComponent)
+        }
+    }
+    
+    @ViewBuilder
+    private func openLocallyButtons(for item: RemoteFileItem) -> some View {
+        let ext = (item.name as NSString).pathExtension.lowercased()
+        let isExcel = ["xlsx", "xls", "csv", "tsv", "tab"].contains(ext) || item.name.hasSuffix(".csv.gz") || item.name.hasSuffix(".tsv.gz")
+        let isWord = ["docx", "doc", "rtf", "odt", "txt"].contains(ext)
+        let isCode = ["py", "rs", "sh", "json", "yaml", "yml", "toml", "md", "c", "cpp", "h", "swift", "js", "ts", "r", "smk"].contains(ext)
+
+        if isExcel {
+            Button(action: { openRemoteItemLocally(item, appName: "Microsoft Excel") }) {
+                Label("Öppna i Microsoft Excel (lokalt)", systemImage: "tablecells.fill")
+            }
+        } else if isWord {
+            Button(action: { openRemoteItemLocally(item, appName: "Microsoft Word") }) {
+                Label("Öppna i Microsoft Word (lokalt)", systemImage: "doc.richtext.fill")
+            }
+        } else if isCode {
+            Button(action: { openRemoteItemLocally(item, appName: "Visual Studio Code") }) {
+                Label("Öppna i VS Code (lokalt)", systemImage: "curlybraces")
+            }
+        }
+
+        Button(action: { openRemoteItemLocally(item, appName: nil) }) {
+            Label("Öppna lokalt (Standardprogram)", systemImage: "arrow.up.forward.app")
+        }
+
+        Menu("Öppna lokalt med...") {
+            Button("Microsoft Excel") {
+                openRemoteItemLocally(item, appName: "Microsoft Excel")
+            }
+            Button("Microsoft Word") {
+                openRemoteItemLocally(item, appName: "Microsoft Word")
+            }
+            Button("Visual Studio Code") {
+                openRemoteItemLocally(item, appName: "Visual Studio Code")
+            }
+            Button("TextEdit") {
+                openRemoteItemLocally(item, appName: "TextEdit")
+            }
+            Divider()
+            Button("Standardprogram (Default)") {
+                openRemoteItemLocally(item, appName: nil)
+            }
         }
     }
     
@@ -612,37 +631,49 @@ public struct RemoteBrowserView: View {
         }
     }
     
-    private func downloadItemToLocal(_ item: RemoteFileItem) {
+    private func downloadItemToLocal(_ item: RemoteFileItem, destination: URL? = nil) {
         isDownloading = true
-        localState.showToast("⬇️ Downloading \(item.name)...")
+        let destFolder = destination ?? sshService.currentDownloadDirectory
+        let folderLabel = destFolder.standardizedFileURL == sshService.currentDownloadDirectory.standardizedFileURL 
+            ? "Downloads/\(sshService.currentDownloadFolderName)" 
+            : destFolder.lastPathComponent
+        localState.showToast("⬇️ Laddar ner \(item.name) till \(folderLabel)...")
         
         Task {
             do {
-                try await sshService.downloadFile(item: item, to: localState.currentDirectory)
+                _ = try await sshService.downloadFile(item: item, to: destFolder)
                 isDownloading = false
-                localState.reload()
-                localState.showToast("✅ Downloaded \(item.name)")
+                if localState.currentDirectory.standardizedFileURL == destFolder.standardizedFileURL {
+                    localState.reload()
+                }
+                localState.showToast("✅ Sparad i \(folderLabel)/\(item.name)")
             } catch {
                 isDownloading = false
-                localState.showToast("Download failed")
+                localState.showToast("Nedladdning misslyckades: \(error.localizedDescription)")
             }
         }
     }
     
-    private func downloadSelectedRemoteToLocal() {
+    private func downloadSelectedRemoteToLocal(destination: URL? = nil) {
         let targets = sshService.remoteItems.filter { selectedRemoteItems.contains($0.remotePath) }
         guard !targets.isEmpty else { return }
         
         isDownloading = true
-        localState.showToast("⬇️ Downloading \(targets.count) file(s)...")
+        let destFolder = destination ?? sshService.currentDownloadDirectory
+        let folderLabel = destFolder.standardizedFileURL == sshService.currentDownloadDirectory.standardizedFileURL 
+            ? "Downloads/\(sshService.currentDownloadFolderName)" 
+            : destFolder.lastPathComponent
+        localState.showToast("⬇️ Laddar ner \(targets.count) filer till \(folderLabel)...")
         
         Task {
             for item in targets {
-                try? await sshService.downloadFile(item: item, to: localState.currentDirectory)
+                _ = try? await sshService.downloadFile(item: item, to: destFolder)
             }
             isDownloading = false
-            localState.reload()
-            localState.showToast("✅ Downloaded \(targets.count) file(s)")
+            if localState.currentDirectory.standardizedFileURL == destFolder.standardizedFileURL {
+                localState.reload()
+            }
+            localState.showToast("✅ Sparade \(targets.count) filer i \(folderLabel)")
         }
     }
     
@@ -698,7 +729,7 @@ public struct RemoteBrowserView: View {
                     if let remotePath = item as? String {
                         Task { @MainActor in
                             if let remoteItem = self.sshService.remoteItems.first(where: { $0.remotePath == remotePath }) {
-                                self.downloadItemToLocal(remoteItem)
+                                self.downloadItemToLocal(remoteItem, destination: self.localState.currentDirectory)
                             }
                         }
                     }
