@@ -234,8 +234,15 @@ public struct MainWindowView: View {
         }
         // Keyboard Shortcuts
         .keyboardShortcut("d", modifiers: .command)
-        .keyboardShortcut("i", modifiers: .command)
         .onKeyPress { press in
+            if press.modifiers.contains(.command) && (press.characters == "l" || press.characters == "L") {
+                currentActiveState.startEditingPath()
+                return .handled
+            }
+            if press.modifiers.contains([.command, .shift]) && (press.characters == "g" || press.characters == "G") {
+                currentActiveState.startEditingPath(prefillFromClipboardIfPath: true)
+                return .handled
+            }
             if press.modifiers.contains(.option) && (press.characters == "s" || press.characters == "S" || press.characters == "ß") {
                 currentActiveState.showingDiskUsageSheet.toggle()
                 return .handled
@@ -280,6 +287,12 @@ public struct MainWindowView: View {
             if let id = notif.object as? Int {
                 saveWorkspacePreset(id: id)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .flashbrowseEditPath)) { _ in
+            currentActiveState.startEditingPath()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .flashbrowsePastePath)) { _ in
+            currentActiveState.pasteAndGoToPath()
         }
     }
     

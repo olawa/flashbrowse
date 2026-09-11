@@ -396,7 +396,28 @@ public class NavigationState: ObservableObject {
         }
         
         // 2. Check for Text in Clipboard
-        if let text = pasteboard.string(forType: .string), !text.isEmpty {
+        if let text = pasteboard.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            // Smart Path Detection: Check if clipboard is a file/directory path
+            let cleaned = cleanPathString(text)
+            if cleaned.hasPrefix("/") || cleaned.hasPrefix("~") {
+                let expanded = NSString(string: cleaned).expandingTildeInPath
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir) {
+                    if isDir.boolValue {
+                        let url = URL(fileURLWithPath: expanded).standardized
+                        navigateTo(url: url)
+                        showToast("📋 Klistrade in och gick till: \(url.lastPathComponent)")
+                        return
+                    } else {
+                        let fileURL = URL(fileURLWithPath: expanded).standardized
+                        navigateTo(url: fileURL.deletingLastPathComponent())
+                        selectedURLs = [fileURL]
+                        showToast("📋 Klistrade in och markerade: \(fileURL.lastPathComponent)")
+                        return
+                    }
+                }
+            }
+            
             let targetURL = currentDirectory.appendingPathComponent("snippet_\(timestamp).txt")
             do {
                 try text.write(to: targetURL, atomically: true, encoding: .utf8)
@@ -725,15 +746,91 @@ public class NavigationState: ObservableObject {
         }
     }
     
+    public func cleanPathString(_ input: String) -> String {
+        var str = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if (str.hasPrefix("\"") && str.hasSuffix("\"")) || (str.hasPrefix("'") && str.hasSuffix("'")) {
+            str = String(str.dropFirst().dropLast())
+        }
+        if str.hasPrefix("file://") {
+            str = String(str.dropFirst(7))
+            if let decoded = str.removingPercentEncoding {
+                str = decoded
+            }
+        }
+        return str.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    public func startEditingPath(prefillFromClipboardIfPath: Bool = false) {
+        if prefillFromClipboardIfPath, let str = NSPasteboard.general.string(forType: .string) {
+            let cleaned = cleanPathString(str)
+            if cleaned.hasPrefix("/") || cleaned.hasPrefix("~") {
+                pathInputText = cleaned
+                isEditingPath = true
+                return
+            }
+        }
+        pathInputText = currentDirectory.path
+        isEditingPath = true
+    }
+
+    public func pasteAndGoToPath() {
+        guard let str = NSPasteboard.general.string(forType: .string) else {
+            showToast("⚠️ Inget innehåll i urklipp")
+            return
+        }
+        let cleaned = cleanPathString(str)
+        guard !cleaned.isEmpty else {
+            showToast("⚠️ Inget innehåll i urklipp")
+            return
+        }
+        let expanded = NSString(string: cleaned).expandingTildeInPath
+        let url = URL(fileURLWithPath: expanded).standardized
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) {
+            if isDir.boolValue {
+                navigateTo(url: url)
+                isEditingPath = false
+                showToast("📋 Gick till: \(url.lastPathComponent)")
+            } else {
+                navigateTo(url: url.deletingLastPathComponent())
+                selectedURLs = [url]
+                isEditingPath = false
+                showToast("📋 Markerade: \(url.lastPathComponent)")
+            }
+        } else {
+            // Open editor with pasted path so user can inspect / fix it
+            pathInputText = cleaned
+            isEditingPath = true
+            showToast("⚠️ Sökvägen hittades inte: \(cleaned)")
+        }
+    }
+    
     public func commitPathInput() {
-        let expanded = NSString(string: pathInputText).expandingTildeInPath
+        let trimmed = pathInputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            pathInputText = currentDirectory.path
+            isEditingPath = false
+            return
+        }
+        
+        let cleaned = cleanPathString(trimmed)
+        let expanded = NSString(string: cleaned).expandingTildeInPath
         let url = URL(fileURLWithPath: expanded).standardized
         
         var isDir: ObjCBool = false
-        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
-            navigateTo(url: url)
-            isEditingPath = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) {
+            if isDir.boolValue {
+                navigateTo(url: url)
+                isEditingPath = false
+                showToast("📂 Gick till: \(url.lastPathComponent)")
+            } else {
+                navigateTo(url: url.deletingLastPathComponent())
+                selectedURLs = [url]
+                isEditingPath = false
+                showToast("📂 Markerade: \(url.lastPathComponent)")
+            }
         } else {
+            showToast("⚠️ Sökvägen finns inte: \(url.path)")
             pathInputText = currentDirectory.path
             isEditingPath = false
         }

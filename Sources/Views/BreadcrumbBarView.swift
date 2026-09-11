@@ -50,7 +50,7 @@ public struct BreadcrumbBarView: View {
             // Ubuntu / Nautilus Style Breadcrumb Path Bar
             Group {
                 if state.isEditingPath {
-                    HStack {
+                    HStack(spacing: 6) {
                         Image(systemName: "folder.fill")
                             .foregroundColor(Color.flashbrowseAccent)
                         TextField("Enter path (e.g. ~/dev or /tmp)", text: $state.pathInputText)
@@ -63,11 +63,34 @@ public struct BreadcrumbBarView: View {
                                 state.isEditingPath = false
                             }
                         
+                        // Paste from Clipboard Button
+                        Button(action: {
+                            if let str = NSPasteboard.general.string(forType: .string) {
+                                state.pathInputText = state.cleanPathString(str)
+                            }
+                        }) {
+                            Image(systemName: "doc.on.clipboard")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color.flashbrowseAccent)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Klistra in från urklipp")
+                        
+                        // Go Button
+                        Button(action: { state.commitPathInput() }) {
+                            Image(systemName: "arrow.right.circle.fill")
+                                .font(.system(size: 13))
+                                .foregroundColor(Color.flashbrowseAccent)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Gå till sökväg (Return)")
+                        
                         Button(action: { state.isEditingPath = false }) {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .help("Avbryt (Esc)")
                     }
                     .padding(.horizontal, 8)
                     .frame(height: 28)
@@ -124,7 +147,7 @@ public struct BreadcrumbBarView: View {
                             Spacer(minLength: 8)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    state.isEditingPath = true
+                                    state.startEditingPath()
                                 }
                         }
                         .padding(.horizontal, 2)
@@ -132,7 +155,24 @@ public struct BreadcrumbBarView: View {
                     .frame(height: 28)
                     .contentShape(Rectangle())
                     .onTapGesture(count: 1) {
-                        state.isEditingPath = true
+                        state.startEditingPath()
+                    }
+                    .contextMenu {
+                        Button("Klistra in sökväg") {
+                            state.pasteAndGoToPath()
+                        }
+                        
+                        Button("Kopiera sökväg") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(state.currentDirectory.path, forType: .string)
+                            state.showToast("📋 Kopierade sökväg")
+                        }
+                        
+                        Divider()
+                        
+                        Button("Redigera sökväg (Cmd+L)") {
+                            state.startEditingPath()
+                        }
                     }
                 }
             }
@@ -152,9 +192,26 @@ public struct BreadcrumbBarView: View {
             .buttonStyle(.plain)
             .help(state.isBookmarked(url: state.currentDirectory) ? "Remove current folder from Favorites" : "Pin current folder to Favorites")
             
+            // Paste Path Button
+            Button(action: {
+                state.pasteAndGoToPath()
+            }) {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 12))
+                    .frame(width: 26, height: 26)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(6)
+            }
+            .buttonStyle(.plain)
+            .help("Klistra in sökväg från urklipp och navigera direkt")
+            
             // Path Edit Button
             Button(action: {
-                state.isEditingPath.toggle()
+                if state.isEditingPath {
+                    state.isEditingPath = false
+                } else {
+                    state.startEditingPath()
+                }
             }) {
                 Image(systemName: state.isEditingPath ? "folder.fill" : "pencil")
                     .font(.system(size: 12))
@@ -163,7 +220,7 @@ public struct BreadcrumbBarView: View {
                     .cornerRadius(6)
             }
             .buttonStyle(.plain)
-            .help("Edit Path (Cmd+L)")
+            .help("Redigera sökväg (Cmd+L)")
             
             // Search Bar with Scope Switcher
             HStack(spacing: 3) {

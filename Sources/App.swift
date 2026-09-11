@@ -122,6 +122,18 @@ struct FlashbrowseApp: App {
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 
+                Divider()
+                
+                Button("Go to Folder / Edit Path...") {
+                    NotificationCenter.default.post(name: .flashbrowseEditPath, object: nil)
+                }
+                .keyboardShortcut("l", modifiers: .command)
+                
+                Button("Paste Path from Clipboard") {
+                    NotificationCenter.default.post(name: .flashbrowsePastePath, object: nil)
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                
                 Button("Paste Clipboard as File") {
                     // Handled in view
                 }

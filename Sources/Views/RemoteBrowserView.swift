@@ -220,6 +220,19 @@ public struct RemoteBrowserView: View {
                                         isEditingRemotePath = false
                                     }
                                 
+                                // Paste from Clipboard Button
+                                Button(action: {
+                                    if let str = NSPasteboard.general.string(forType: .string) {
+                                        remotePathInputText = cleanRemotePathString(str)
+                                    }
+                                }) {
+                                    Image(systemName: "doc.on.clipboard")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color.green)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Klistra in från urklipp")
+                                
                                 Button(action: { commitRemotePath() }) {
                                     Image(systemName: "arrow.right.circle.fill")
                                         .font(.system(size: 13))
@@ -295,6 +308,20 @@ public struct RemoteBrowserView: View {
                                     }
                                 
                                 Button(action: {
+                                    pasteAndGoToRemotePath()
+                                }) {
+                                    Image(systemName: "doc.on.clipboard")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(Color.green)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 3)
+                                        .background(Color(nsColor: .controlBackgroundColor).opacity(0.7))
+                                        .cornerRadius(4)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Klistra in sökväg från urklipp och navigera direkt")
+                                
+                                Button(action: {
                                     startEditingRemotePath()
                                 }) {
                                     HStack(spacing: 3) {
@@ -315,6 +342,23 @@ public struct RemoteBrowserView: View {
                             .contentShape(Rectangle())
                             .onTapGesture(count: 1) {
                                 startEditingRemotePath()
+                            }
+                            .contextMenu {
+                                Button("Klistra in sökväg") {
+                                    pasteAndGoToRemotePath()
+                                }
+                                
+                                Button("Kopiera fjärrsökväg") {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(sshService.currentRemotePath, forType: .string)
+                                    localState.showToast("📋 Kopierade fjärrsökväg")
+                                }
+                                
+                                Divider()
+                                
+                                Button("Redigera sökväg (Cmd+G)") {
+                                    startEditingRemotePath()
+                                }
                             }
                         }
                         
@@ -392,14 +436,27 @@ public struct RemoteBrowserView: View {
             }
         }
         .onKeyPress { press in
-            if press.modifiers.contains(.command) && (press.characters == "g" || press.characters == "G") {
-                remotePathInputText = sshService.currentRemotePath
-                isEditingRemotePath = true
-                isRemotePathFocused = true
+            if press.modifiers.contains(.command) && (press.characters == "g" || press.characters == "G" || press.characters == "l" || press.characters == "L") {
+                startEditingRemotePath()
+                return .handled
+            }
+            if press.modifiers.contains([.command, .shift]) && (press.characters == "g" || press.characters == "G") {
+                pasteAndGoToRemotePath()
                 return .handled
             }
             return .ignored
         }
+    }
+    
+    private func cleanRemotePathString(_ input: String) -> String {
+        var str = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if (str.hasPrefix("\"") && str.hasSuffix("\"")) || (str.hasPrefix("'") && str.hasSuffix("'")) {
+            str = String(str.dropFirst().dropLast())
+        }
+        if str.hasPrefix("file://") {
+            str = String(str.dropFirst(7))
+        }
+        return str.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     private func startEditingRemotePath() {
@@ -411,11 +468,25 @@ public struct RemoteBrowserView: View {
     }
 
     private func commitRemotePath() {
-        let clean = remotePathInputText.trimmingCharacters(in: .whitespaces)
+        let clean = cleanRemotePathString(remotePathInputText)
         if !clean.isEmpty {
             sshService.navigateToRemote(path: clean)
         }
         isEditingRemotePath = false
+    }
+
+    private func pasteAndGoToRemotePath() {
+        guard let str = NSPasteboard.general.string(forType: .string) else {
+            localState.showToast("⚠️ Inget innehåll i urklipp")
+            return
+        }
+        let clean = cleanRemotePathString(str)
+        guard !clean.isEmpty else {
+            localState.showToast("⚠️ Inget innehåll i urklipp")
+            return
+        }
+        sshService.navigateToRemote(path: clean)
+        localState.showToast("🌐 Gick till \(clean)")
     }
     
     // MARK: - Remote Files Table
