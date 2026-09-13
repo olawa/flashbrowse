@@ -15,15 +15,6 @@ public extension Color {
     static let flashbrowseTerminalBg = Color(red: 0.08, green: 0.08, blue: 0.08)
 }
 
-// MARK: - Shell Escaping Utility
-public extension String {
-    /// Shell-escapes a string for safe interpolation into shell commands.
-    /// Wraps the string in single quotes and escapes any embedded single quotes.
-    var shellEscaped: String {
-        "'" + self.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
-}
-
 // MARK: - App Notification Names
 public extension Notification.Name {
     static let flashbrowseSwitchWorkspace = Notification.Name("flashbrowseSwitchWorkspace")
