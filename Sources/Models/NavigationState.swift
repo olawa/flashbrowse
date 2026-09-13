@@ -272,6 +272,8 @@ public class NavigationState: ObservableObject {
     private var forwardStack: [URL] = []
     private var lastPinchTime: Date = Date.distantPast
     private var inspectorDebounceTask: Task<Void, Never>?
+    private var reloadTask: Task<Void, Never>?
+    private var deepSearchTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
     
     public var canGoBack: Bool { !backStack.isEmpty }
@@ -695,22 +697,47 @@ public class NavigationState: ObservableObject {
         }
     }
     
+    /// Refresh the pane from disk.
+    ///
+    /// Enumerating a directory reads metadata per entry, which is slow on the
+    /// mounts this app is used with (SSHFS, SMB, cluster shares) and on folders
+    /// with tens of thousands of files. NavigationState is @MainActor, so doing
+    /// it inline froze the whole window; the work runs off the main actor and
+    /// the result is applied only if the pane is still showing that directory.
     public func reload() {
-        let rawItems = FileSystemService.shared.contentsOfDirectory(
-            at: currentDirectory,
-            showHidden: showHiddenFiles
-        )
-        self.items = rawItems
-        let storage = FileSystemService.shared.getVolumeStorageInfo(at: currentDirectory)
-        self.volumeStorage = storage
-        self.volumeInfo = storage?.statusSummary ?? FileSystemService.shared.volumeAvailableCapacity(at: currentDirectory)
-        applyFilterAndSort()
+        reloadTask?.cancel()
+        let dir = currentDirectory
+        let showHidden = showHiddenFiles
+
+        reloadTask = Task { [weak self] in
+            let loaded = await Self.loadDirectory(at: dir, showHidden: showHidden)
+            guard let self, !Task.isCancelled, self.currentDirectory == dir else { return }
+
+            self.items = loaded.items
+            self.volumeStorage = loaded.storage
+            self.volumeInfo = loaded.info
+            self.applyFilterAndSort()
+        }
+    }
+
+    private nonisolated static func loadDirectory(
+        at dir: URL,
+        showHidden: Bool
+    ) async -> (items: [FileItem], storage: VolumeStorageInfo?, info: String) {
+        await Task.detached(priority: .userInitiated) {
+            let items = FileSystemService.shared.contentsOfDirectory(at: dir, showHidden: showHidden)
+            let storage = FileSystemService.shared.getVolumeStorageInfo(at: dir)
+            let info = storage?.statusSummary
+                ?? FileSystemService.shared.volumeAvailableCapacity(at: dir)
+            return (items, storage, info)
+        }.value
     }
     
     public func applyFilterAndSort() {
         let query = searchQuery.trimmingCharacters(in: .whitespaces).lowercased()
-        
+
         if query.isEmpty {
+            deepSearchTask?.cancel()
             self.filteredItems = FileSystemService.shared.sort(
                 items: items,
                 by: sortField,
@@ -722,18 +749,34 @@ public class NavigationState: ObservableObject {
         }
         
         if searchScope == .includeSubfolders {
-            let deepResults = FileSystemService.shared.recursiveSearch(
-                query: query,
-                in: currentDirectory,
-                showHidden: showHiddenFiles
-            )
-            self.filteredItems = FileSystemService.shared.sort(
-                items: deepResults,
-                by: sortField,
-                ascending: sortAscending,
-                foldersFirst: foldersFirst,
-                folderSizes: folderSizesCache
-            )
+            // Walking the whole subtree on every keystroke is far too slow for
+            // the main actor; run it off-actor and drop the result if the query
+            // or the directory moved on while it ran.
+            deepSearchTask?.cancel()
+            let dir = currentDirectory
+            let showHidden = showHiddenFiles
+
+            deepSearchTask = Task { [weak self] in
+                let deepResults = await Task.detached(priority: .userInitiated) {
+                    FileSystemService.shared.recursiveSearch(
+                        query: query,
+                        in: dir,
+                        showHidden: showHidden
+                    )
+                }.value
+
+                guard let self, !Task.isCancelled, self.currentDirectory == dir,
+                      self.searchQuery.trimmingCharacters(in: .whitespaces).lowercased() == query
+                else { return }
+
+                self.filteredItems = FileSystemService.shared.sort(
+                    items: deepResults,
+                    by: self.sortField,
+                    ascending: self.sortAscending,
+                    foldersFirst: self.foldersFirst,
+                    folderSizes: self.folderSizesCache
+                )
+            }
         } else {
             let matches = items.filter { $0.lowercaseName.contains(query) }
             self.filteredItems = FileSystemService.shared.sort(
