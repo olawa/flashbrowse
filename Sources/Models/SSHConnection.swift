@@ -32,6 +32,22 @@ public struct SSHHost: Identifiable, Codable, Hashable, Sendable {
         return "\(hostName)\(port != 22 ? ":\(port)" : "")"
     }
     
+    /// `user@host` (or just `host`), without any path.
+    public var scpTarget: String {
+        user.isEmpty ? hostName : "\(user)@\(hostName)"
+    }
+
+    /// An scp source/destination for `path` on this host.
+    ///
+    /// scp hands the remote half to the remote shell, so the path must be
+    /// quoted there: without it a file called "my data.bam" is read as two
+    /// arguments and one called "a;rm -rf x" runs the rm. Local paths are
+    /// passed as plain process arguments and need no quoting.
+    public func scpRemoteSpec(path: String, isDirectory: Bool = false) -> String {
+        let suffix = isDirectory ? "/" : ""
+        return "\(scpTarget):\(path.shellEscaped)\(suffix)"
+    }
+
     public var sshCommandArgs: [String] {
         var args: [String] = []
         if port != 22 {

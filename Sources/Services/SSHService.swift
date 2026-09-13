@@ -391,7 +391,7 @@ public class SSHService: ObservableObject {
                     args.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath])
                 }
                 
-                let remoteSource = host.user.isEmpty ? "\(host.hostName):\(item.remotePath)" : "\(host.user)@\(host.hostName):\(item.remotePath)"
+                let remoteSource = host.scpRemoteSpec(path: item.remotePath)
                 args.append(remoteSource)
                 args.append(localTarget.path)
                 
@@ -475,7 +475,7 @@ public class SSHService: ObservableObject {
                     args.append(contentsOf: ["-i", NSString(string: key).expandingTildeInPath])
                 }
                 
-                let remoteSource = host.user.isEmpty ? "\(host.hostName):\(item.remotePath)" : "\(host.user)@\(host.hostName):\(item.remotePath)"
+                let remoteSource = host.scpRemoteSpec(path: item.remotePath)
                 args.append(remoteSource)
                 args.append(localTarget.path)
                 
@@ -515,7 +515,7 @@ public class SSHService: ObservableObject {
                 }
                 
                 args.append(localURL.path)
-                let remoteDest = host.user.isEmpty ? "\(host.hostName):\(remoteDirectory)/" : "\(host.user)@\(host.hostName):\(remoteDirectory)/"
+                let remoteDest = host.scpRemoteSpec(path: remoteDirectory, isDirectory: true)
                 args.append(remoteDest)
                 
                 process.arguments = args
