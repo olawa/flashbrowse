@@ -15,29 +15,23 @@ public class DiskUsageService {
                 let fm = FileManager.default
                 var folderSizesKB: [String: Int64] = [:]
                 
-                // 1. Run du -k -d 1 for high-speed subfolder tree scanning
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/du")
-                process.arguments = ["-k", "-d", "1", path]
-                
-                let pipe = Pipe()
-                process.standardOutput = pipe
-                process.standardError = Pipe()
-                
+                // 1. Run du -k -d 1 for high-speed subfolder tree scanning.
+                // du writes one line per subfolder and a "Permission denied" line
+                // per unreadable one, so both streams are drained concurrently -
+                // either of them filling its pipe buffer would hang the scan.
                 do {
-                    try process.run()
-                    process.waitUntilExit()
-                    
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    if let output = String(data: data, encoding: .utf8) {
-                        for line in output.components(separatedBy: "\n") {
-                            let parts = line.split(separator: "\t", maxSplits: 1).map(String.init)
-                            if parts.count == 2 {
-                                let kbStr = parts[0].trimmingCharacters(in: .whitespaces)
-                                let itemPath = parts[1].trimmingCharacters(in: .whitespaces)
-                                if let kb = Int64(kbStr), itemPath != path {
-                                    folderSizesKB[itemPath] = kb
-                                }
+                    let result = try ProcessRunner.run(
+                        executableURL: URL(fileURLWithPath: "/usr/bin/du"),
+                        arguments: ["-k", "-d", "1", path]
+                    )
+
+                    for line in result.stdoutString.components(separatedBy: "\n") {
+                        let parts = line.split(separator: "\t", maxSplits: 1).map(String.init)
+                        if parts.count == 2 {
+                            let kbStr = parts[0].trimmingCharacters(in: .whitespaces)
+                            let itemPath = parts[1].trimmingCharacters(in: .whitespaces)
+                            if let kb = Int64(kbStr), itemPath != path {
+                                folderSizesKB[itemPath] = kb
                             }
                         }
                     }
@@ -133,21 +127,13 @@ public class DiskUsageService {
         
         return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/du")
-                process.arguments = ["-sk", path]
-                
-                let pipe = Pipe()
-                process.standardOutput = pipe
-                process.standardError = Pipe()
-                
                 do {
-                    try process.run()
-                    process.waitUntilExit()
-                    
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    if let output = String(data: data, encoding: .utf8),
-                       let firstLine = output.components(separatedBy: "\n").first {
+                    let result = try ProcessRunner.run(
+                        executableURL: URL(fileURLWithPath: "/usr/bin/du"),
+                        arguments: ["-sk", path]
+                    )
+
+                    if let firstLine = result.stdoutString.components(separatedBy: "\n").first {
                         let parts = firstLine.split(separator: "\t", maxSplits: 1).map(String.init)
                         if let kbStr = parts.first?.trimmingCharacters(in: .whitespaces),
                            let kb = Int64(kbStr) {

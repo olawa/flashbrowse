@@ -331,12 +331,6 @@ public class SSHService: ObservableObject {
     public func runSSHCommand(host: SSHHost, command: String) async throws -> String {
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                let process = Process()
-                let pipe = Pipe()
-                let errPipe = Pipe()
-                
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-                
                 var args = [
                     "-o", "BatchMode=yes",
                     "-o", "ConnectTimeout=8",
@@ -344,23 +338,23 @@ public class SSHService: ObservableObject {
                 ]
                 args.append(contentsOf: host.sshCommandArgs)
                 args.append(command)
-                
-                process.arguments = args
-                process.standardOutput = pipe
-                process.standardError = errPipe
-                
+
                 do {
-                    try process.run()
-                    process.waitUntilExit()
-                    
-                    if process.terminationStatus == 0 {
-                        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                        let str = String(data: data, encoding: .utf8) ?? ""
-                        continuation.resume(returning: str)
+                    // A listing of a large remote directory is far more than one
+                    // pipe buffer, so both streams have to be drained while the
+                    // remote command is still running.
+                    let result = try ProcessRunner.run(
+                        executableURL: URL(fileURLWithPath: "/usr/bin/ssh"),
+                        arguments: args
+                    )
+
+                    if result.succeeded {
+                        continuation.resume(returning: result.stdoutString)
                     } else {
-                        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-                        let errStr = String(data: errData, encoding: .utf8) ?? "Exit code \(process.terminationStatus)"
-                        continuation.resume(throwing: NSError(domain: "SSHService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: errStr]))
+                        let errStr = result.stderrString.isEmpty
+                            ? "Exit code \(result.terminationStatus)"
+                            : result.stderrString
+                        continuation.resume(throwing: NSError(domain: "SSHService", code: Int(result.terminationStatus), userInfo: [NSLocalizedDescriptionKey: errStr]))
                     }
                 } catch {
                     continuation.resume(throwing: error)

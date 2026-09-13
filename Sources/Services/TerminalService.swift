@@ -697,35 +697,30 @@ public class TerminalService: ObservableObject {
         }
         
         Task.detached(priority: .userInitiated) {
-            let process = Process()
-            let outPipe = Pipe()
-            let errPipe = Pipe()
-            
-            process.executableURL = executableURL
-            process.arguments = arguments
             var env = environment
             env["TERM"] = "xterm-256color"
-            process.environment = env
-            process.standardOutput = outPipe
-            process.standardError = errPipe
-            
-            await MainActor.run {
-                if isRight {
-                    self.activeRightProcess = process
-                } else {
-                    self.activeProcess = process
-                }
-            }
-            
+
             do {
-                try process.run()
-                
-                let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-                let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-                
-                let outStr = String(data: outData, encoding: .utf8) ?? ""
-                let errStr = String(data: errData, encoding: .utf8) ?? ""
+                // Bioinformatics tools log progress to stderr while writing
+                // results to stdout, so draining one stream at a time would hang
+                // as soon as the other filled its pipe buffer.
+                let result = try ProcessRunner.run(
+                    executableURL: executableURL,
+                    arguments: arguments,
+                    environment: env,
+                    onStart: { process in
+                        Task { @MainActor in
+                            if isRight {
+                                self.activeRightProcess = process
+                            } else {
+                                self.activeProcess = process
+                            }
+                        }
+                    }
+                )
+
+                let outStr = result.stdoutString
+                let errStr = result.stderrString
                 
                 await MainActor.run {
                     if isRight {
